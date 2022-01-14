@@ -1,9 +1,18 @@
 <script setup>
-import { getDay, getTime, getWeek, startOfWeek } from 'date-fns'
+import { format, getDay, getTime, getWeek, startOfWeek, endOfWeek, subWeeks, addWeeks, startOfDay, subDays, addDays } from 'date-fns'
 
-import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, arrayRemove, arrayUnion, deleteField } from "firebase/firestore";
+import { getFirestore, collection, onSnapshot, doc, getDoc, setDoc, updateDoc, arrayRemove, arrayUnion, deleteField } from "firebase/firestore";
+
+import { DoughnutChart, useDoughnutChart } from "vue-chart-3"
+import { Chart, registerables } from "chart.js"
+import ChartDataLabels from 'chartjs-plugin-datalabels'
+Chart.register(ChartDataLabels)
+Chart.register(...registerables)
 
 import Color from './Color.vue'
+import Icon from './Icon.vue'
+import Selector from './Selector.vue'
+import Dialog from './Dialog.vue'
 import LoginBox from './LoginBox.vue'
 import { computed, defineComponent, onMounted, ref, watch } from 'vue'
 import interact from 'interactjs'
@@ -11,13 +20,19 @@ import interact from 'interactjs'
 import invert from 'invert-color'
 
 import icons from "../icons"
-import { a } from '../../../public/assets/vendor.0f8db044';
 
 
 defineProps({
 	msg: String
 })
 
+const selectorIcons = computed(() => {
+	return Object.keys(icons).map((i) => ({
+		name: i
+	}))
+})
+
+const profileData = ref(null)
 
 const gridMode = ref(false)
 
@@ -179,65 +194,6 @@ const blockEls = ref([])
 const currentChunk = ref(null)
 
 
-const alias = ref({
-	"browsing": "globe",
-	"internet": "globe",
-	"timebar": "hourglass-half",
-	"sleeping": "bed",
-	"sleep": "bed",
-	"eating": "utensils",
-	"eat": "utensils",
-	"drinking": "glass-martini",
-	"drink": "glass-martini",
-	"working": "briefcase",
-	"work": "briefcase",
-	"playing": "gamepad",
-	"play": "gamepad",
-	"game": "gamepad",
-	"gaming": "gamepad",
-	"reading": "book",
-	"read": "book",
-	"coding": "code",
-	"code": "code",
-	"studying": "graduation-cap",
-	"study": "graduation-cap",
-	"shopping": "shopping-cart",
-	"shop": "shopping-cart",
-	"cooking": "utensils",
-	"cook": "utensils",
-	"cleaning": "broom",
-	"clean": "broom",
-	"running": "running",
-	"run": "running",
-	"walking": "walking",
-	"walk": "walking",
-	"swimming": "swimmer",
-	"swim": "swimmer",
-	"sitting": "chair",
-	"sit": "chair",
-	"hiking": "hiking",
-	"hike": "hiking",
-	"cycling": "bicycle",
-	"cycle": "bicycle",
-	"skiing": "skiing",
-	"ski": "skiing",
-	"outdoors": "tree",
-	"outdoor": "tree",
-	"brushing": "tooth",
-	"bath": "bath",
-	"washing": "sing",
-	"bathroom": "toilet",
-	"email": "envelope",
-	"phone": "phone",
-	"meeting": "phone",
-	"groceries": "shopping-basket",
-	"grocer": "shopping-basket",
-	"grocery": "shopping-basket",
-	"dishes": "hand-sparkles",
-	"admin": "file-invoice",
-	"administration": "file-invoice",
-	"learning": "question"
-})
 
 const count = ref(0)
 
@@ -354,7 +310,6 @@ document.addEventListener("keyup", e => {
 	}
 
 	if (t) setTimeout(() => {
-		console.log("snap")
 		snapPosition()
 		updateGlobal()
 	}, 10)
@@ -391,6 +346,60 @@ function getBlockAt(x, y, ignore) {
 	return null
 }
 
+function formatDate(d) {
+	if (selectedWeek.value.start.getYear() == selectedWeek.value.end.getYear())
+		return format(d, "MMM d")
+	else
+		return format(d, "MMM d yyyy")
+}
+
+const actions = []
+let actionTimeout = null
+
+function enqueueDBAction(fn) {
+	clearTimeout(actionTimeout)
+	actions.push(fn)
+
+	actionTimeout = setTimeout(() => {
+		for (let a of actions)
+			a()
+		
+		actions.splice(0, actions.length)
+	}, 500)
+}
+
+function getSetting(name, defaultValue) {
+	let profData = profileData.value // This will subscribe to profile data so that we notify computed props that this func has updated
+	if (profData && profData.settings) {
+
+	}
+	if (!isInitialized.value) return defaultValue
+
+	if (profData.settings && profData.settings[name]) {
+		return profData.settings[name]
+	} else {
+		return defaultValue
+	}
+}
+
+let settingTimeout = null
+
+function setSetting(name, value) {
+	if (!isInitialized.value) return
+
+	if (profileData.value) {
+		if (!profileData.value.settings) profileData.value.settings = {}
+		profileData.value.settings[name] = value
+	}
+
+	let dRef = getProfRef()
+	enqueueDBAction(() => {
+		updateDoc(dRef, {
+			[["settings." + name]]: value
+		})
+	});
+}
+
 async function deleteBlock(block) {
 	if (blocks.value.length == 1) {
 		return
@@ -403,9 +412,9 @@ async function deleteBlock(block) {
 	}
 
 	let dRef = getProfRef()
-	console.log(await updateDoc(dRef, {
+	await updateDoc(dRef, {
 		[["blocks." + block.id]]: deleteField()
-	}))
+	})
 }
 
 function updateGlobal() {
@@ -504,10 +513,11 @@ function refreshConnection(u) {
 		const unsubscribe = onSnapshot(doc(db, "users", user.value.uid), snapshot => {
 			isProfileWatched.value = true
 			let d = snapshot.data()
-			console.log(d)
+			
 			if (d) {
 				isInitialized.value = true
 				blocks.value = Object.keys(d.blocks).map(id => d.blocks[id])
+				profileData.value = d
 			}
 		});
 
@@ -641,11 +651,11 @@ window.addEventListener("mousewheel", (e) => {
 	if (currentTab.value == "tracking") {
 		scale.value -= e.deltaY / 1000
 	} else {
-
+		if (!e.target.closest(".calendar")) return
 		let oldScale = calendarScale.value
 		let py = e.clientY
 		let ty = (py - calendarY.value) / calendarScale.value
-
+		
 		calendarScale.value -= (e.deltaY / 1000) * calendarScale.value
 		calendarScale.value = Math.min(90, Math.max(1, calendarScale.value))
 		
@@ -706,6 +716,7 @@ onMounted(() => {
 		}
 	})
 	.draggable({
+		//lockAxis: "start",
 		listeners: {
 			start (event) {
 				calendarDragging.value = true
@@ -727,6 +738,8 @@ onMounted(() => {
 				if (calendarY.value > window.innerHeight - 100) {
 					calendarY.value = window.innerHeight - 100
 				}
+
+				//calendarSwipeX.value += event.dx
 			},
 			end (event) {
 				calendarDragging.value = false
@@ -734,6 +747,7 @@ onMounted(() => {
 					confirmResize()
 					isResizing.value = false
 				}
+				calendarSwipeX.value = 0
 			}
 		}
 	})
@@ -900,12 +914,10 @@ function getCurrentTime() {
 
 const currentTracking = computed(() => {
 	let log = linearLog.value
-	console.log(log)
 	if (log.length == 0) {
 		return null
 	}
 	let last = log[log.length - 1]
-	console.log(last)
 
 	return {
 		time: last[0],
@@ -945,7 +957,6 @@ function startTracking(block) {
 	}, 1000)
 }
 
-
 function getChunkRef() {
 	let m = getCurrentChunk()
 	return doc(db, "users", user.value.uid, "chunks", m)
@@ -979,6 +990,25 @@ function initUser(useTemplate) {
 function formatTime(t) {
 	let dec = t - Math.floor(t)
 	return `${Math.floor(t)}:${Math.round(dec * 60).toString().padStart(2, "0")}`
+}
+
+function formatTimeClockMode(t) {
+	let dec = t - Math.floor(t)
+	let suffix = ""
+	if (clockMode.value == "12h") {
+
+		if (t >= 12) {
+			t -= 12
+			suffix = "p"
+		} else {
+			suffix = "a"
+		}
+
+		if (Math.floor(t) == 0) {
+			t = 12
+		}
+	}
+	return `${Math.floor(t)}:${Math.round(dec * 60).toString().padStart(2, "0")}${suffix}`
 }
 
 function getNewId() {
@@ -1035,6 +1065,7 @@ function formatSeconds(s) {
 
 const calendarX = ref(0)
 const calendarY = ref(0)
+const calendarSwipeX = ref(0)
 
 centerCalendar()
 
@@ -1046,7 +1077,7 @@ function floorToChunk(t) {
 	return cid
 }
 
-function getChunkForTime(t) {
+async function getChunkForTime(t) {
 	let cid = floorToChunk(t).toString()
 
 	if (cid == getCurrentChunk()) {
@@ -1057,9 +1088,9 @@ function getChunkForTime(t) {
 	if (chunkCache.value[cid]) {
 		return chunkCache.value[cid]
 	}else{
-		let c = getDoc(cRef)
-		if (c) {
-			chunkCache.value[cid] = c
+		let c = await getDoc(cRef)
+		if (c && c.exists()) {
+			chunkCache.value[cid] = c.data()
 			return c
 		}
 	}
@@ -1067,8 +1098,66 @@ function getChunkForTime(t) {
 	return null
 }
 
-function getLatestTimeLog(time) {
-	let c = getChunkForTime(time)
+function setKeyWithDotsInObj(obj, key, value) {
+	let keys = key.split(".")
+	let last = keys.pop()
+	let o = obj
+	for (let k of keys) {
+		if (!o[k]) {
+			o[k] = {}
+		}
+		o = o[k]
+	}
+	o[last] = value
+}
+
+function deleteKeyWithDotsInObj(obj, key) {
+	let keys = key.split(".")
+	let last = keys.pop()
+	let o = obj
+	for (let k of keys) {
+		if (!o[k]) {
+			return
+		}
+		o = o[k]
+	}
+	delete o[last]
+}
+
+async function setKeyInChunk(time, key, value) {
+	let cid = floorToChunk(time).toString()
+	let cRef = doc(db, "users", user.value.uid, "chunks", cid)
+	let c = await getChunkForTime(time)
+	
+	if (c) {
+		setKeyWithDotsInObj(c, key, value)
+	}
+
+	enqueueDBAction(() => {
+		updateDoc(cRef, {
+			[[key]]: value
+		})
+	})
+}
+
+async function deleteKeyInChunk(time, key) {
+	let cid = floorToChunk(time).toString()
+	let cRef = doc(db, "users", user.value.uid, "chunks", cid)
+	let c = await getChunkForTime(time)
+
+	if (c) {
+		deleteKeyWithDotsInObj(c, key)
+	}
+
+	enqueueDBAction(() => {
+		updateDoc(cRef, {
+			[[key]]: deleteField()
+		})
+	})
+}
+
+async function getLatestTimeLog(time) {
+	let c = await getChunkForTime(time)
 	let ctime = floorToChunk(time)
 	if (c) {
 		let log = Object.keys(c.log).map(v => [parseInt(v), c.log[v]]).sort((a, b) => a[0] - b[0])
@@ -1080,7 +1169,7 @@ function getLatestTimeLog(time) {
 		}
 	}
 
-	let cBack = getChunkForTime(time - (1000 * 60 * 60 * 24 * 14))
+	let cBack = await getChunkForTime(time - (1000 * 60 * 60 * 24 * 14))
 	ctime = floorToChunk(time - (1000 * 60 * 60 * 24 * 14))
 	if (cBack) {
 		let log = Object.keys(cBack.log).map(v => [parseInt(v), cBack.log[v]]).sort((a, b) => a[0] - b[0])
@@ -1095,8 +1184,8 @@ function getLatestTimeLog(time) {
 	return null
 }
 
-function getLogForDay(day) {
-	let chunk = getChunkForTime(day)
+async function getLogForDay(day) {
+	let chunk = await getChunkForTime(day)
 	let chunkStart = floorToChunk(day)
 	let dayInSeconds = day / 1000
 
@@ -1119,7 +1208,7 @@ function getLogForDay(day) {
 		return a
 	}
 
-	if (chunk) {
+	if (chunk && chunk.log) {
 		let logs = Object.keys(chunk.log).map(v => [parseInt(v), chunk.log[v]]).sort((a, b) => a[0] - b[0]).filter(v => {
 			let vi = v[0] + chunkStart
 			if (vi >= dayInSeconds && vi < dayInSeconds + 60 * 60 * 24) {
@@ -1128,7 +1217,7 @@ function getLogForDay(day) {
 		})
 
 		if (logs.length == 0) {
-			let lastActivity = getLatestTimeLog(day)
+			let lastActivity = await getLatestTimeLog(day)
 			if (lastActivity) {
 				if (lastActivity.chunk + lastActivity.log[0] > dayInSeconds) {
 					return []
@@ -1160,14 +1249,82 @@ function getLogForDay(day) {
 	}
 }
 
-const weekTimeChunks = computed(() => {
-	let sow = getTime(startOfWeek(new Date()))
+const selectedTime = ref(new Date())
+
+const selectedWeek = computed(() => {
+	let time = selectedTime.value
+	if (window.innerWidth <= 900) {
+		return {
+			start: startOfDay(time),
+			end: startOfDay(time),
+		}
+	}
+	return {
+		start: startOfWeek(time),
+		end: endOfWeek(time),
+	}
+})
+
+const calendarAnimating = ref(false)
+const calendarAnimatingTo = ref(0)
+
+const weekTimeChunks = ref([[], [], [], [], [], [], []])
+
+function prevWeek() {
+	calendarAnimating.value = true
+	calendarAnimatingTo.value = 1
+	setTimeout(() => {
+		weekTimeChunks.value = [[], [], [], [], [], [], []]
+		if (window.innerWidth <= 900) {
+			selectedTime.value = subDays(selectedTime.value, 1)
+		}else{
+			selectedTime.value = subWeeks(selectedTime.value, 1)
+		}
+		calendarAnimating.value = false
+	}, 300)
+}
+
+function nextWeek() {
+	calendarAnimatingTo.value = -1
+	calendarAnimating.value = true
+	setTimeout(() => {
+		weekTimeChunks.value = [[], [], [], [], [], [], []]
+		if (window.innerWidth <= 900) {
+			selectedTime.value = addDays(selectedTime.value, 1)
+		}else{
+			selectedTime.value = addWeeks(selectedTime.value, 1)
+		}
+		calendarAnimating.value = false
+	}, 300)
+}
+
+const weekList = computed(() => {
+	let x = []
+	let d = new Date()
+	for (let i = 0; i < 24; i++) {
+		let t = subWeeks(d, i)
+		x.push({
+			time: t,
+			name: format(t, "dd MMMM yyyy"),
+		})
+	}
+	return x
+})
+
+function selectWeek(time) {
+	selectedTime.value = time.time
+}
+
+const chartRange = ref(1)
+
+watch([selectedWeek, currentChunk], async () => {
+	let sow = getTime(selectedWeek.value.start)
 	let days = []
-	let dbefore = getLogForDay(sow - 24 * 60 * 60 * 1000)
+	let dbefore = await getLogForDay(sow - 24 * 60 * 60 * 1000)
 	for (let i = 0; i < 7; i++) {
 		let startOfDay = sow + i * 24 * 60 * 60 * 1000
 		let startOfDayChunk = startOfDay / 1000 - floorToChunk(startOfDay)
-		let d = getLogForDay(startOfDay)
+		let d = await getLogForDay(startOfDay)
 		if (d.length > 0) {
 			if (d[0][0] != startOfDay / 1000) {
 				if (dbefore.length > 0)
@@ -1192,8 +1349,8 @@ const weekTimeChunks = computed(() => {
 
 		dbefore = d
 	}
-	return days
-})
+	weekTimeChunks.value = days
+}, {deep: true})
 
 const weekTimeChunksInView = computed(() => {
 	let chunks = weekTimeChunks.value
@@ -1213,14 +1370,6 @@ const weekTimeChunksInView = computed(() => {
 		day => day.length > 50 ? day.slice(0, 50) : day
 	)
 })
-
-setTimeout(() => {
-	console.log(weekTimeChunks.value)
-}, 1000)
-
-setInterval(() => {
-	console.log(weekTimeChunksInView.value[0].length + " of " + weekTimeChunks.value[0].length)
-}, 500);
 
 const divisions = ref([
 	[0, 24],
@@ -1296,12 +1445,15 @@ function confirmResize() {
 	let key = resizingEdgeChunkTime.value.toString()
 
 	let activity = currentChunk.value.log[key]
-	delete currentChunk.value.log[key]
+	deleteKeyInChunk(getTime(selectedTime.value), "log." + key)
+	//delete currentChunk.value.log[key]
 	let offset = currentWeekdayAndTimeToChunkTime(resizingDay.value, 0)
 	let r = offset + resizingBlockTarget.value
 
-	if (r - resizingEdgeChunkTime.value != 0)
-		currentChunk.value.log[r.toString()] = activity
+	if (r - resizingEdgeChunkTime.value != 0) {
+		//currentChunk.value.log[r.toString()] = activity
+		setKeyInChunk(getTime(selectedTime.value), "log." + r.toString(), activity)
+	}
 }
 
 function currentWeekdayAndTimeToChunkTime(day, time) {
@@ -1343,6 +1495,130 @@ function startResize(e, d, start, end) {
 		isResizing.value = false
 	}
 }
+
+const clockMode = computed(() => {
+	profileData.value
+	return getSetting("clockMode", "24h")
+})
+
+function toggleClockMode() {
+	if (clockMode.value == "24h") {
+		setSetting("clockMode", "12h")
+	}else{
+		setSetting("clockMode", "24h")
+	}
+}
+
+function addLogBlock(time, blockId) {
+	currentChunk.value.log[Math.floor(time).toString()] = blockId
+}
+
+function addTimeBlock(d, start, end, direction) {
+	let chunkTime = currentWeekdayAndTimeToChunkTime(d, start)
+	let i = getLogItemIndex(chunkTime)
+	if (direction) {
+		setKeyInChunk(getTime(selectedTime.value), "log." + Math.floor(chunkTime + (end - start) * 0.9).toString(), linearLog.value[i][1])
+	}else{
+		setKeyInChunk(getTime(selectedTime.value), "log." + Math.floor(chunkTime + (end - start) * 0.1).toString(), linearLog.value[i][1])
+	}
+}
+
+function updateTimeBlock(d, start, blockId) {
+	let chunkTime = currentWeekdayAndTimeToChunkTime(d, start)
+	//currentChunk.value.log[chunkTime.toString()] = blockId
+	setKeyInChunk(getTime(selectedTime.value), "log." + chunkTime.toString(), blockId)
+}
+
+const dataValues = ref([30, 40, 60, 70, 5]);
+const toggleLegend = ref(true);
+
+const testData = ref(null)
+watch([chartRange, currentChunk], async () => {
+
+	let times = {}
+	let range = chartRange.value
+	let start = getTime(subWeeks(startOfWeek(new Date()), range))
+	let end = getTime(endOfWeek(new Date()))
+
+	let chunks = {}
+
+	for (let i = start; i < end; i += 1000 * 60 * 60 * 24) {
+		let c = floorToChunk(i)
+		if (!chunks[c]) {
+			let cdata = await getChunkForTime(i)
+			if (cdata)
+				chunks[c] = cdata
+		}
+	}
+
+	let timer = start
+	let activity = "blank"
+	let total = 0
+
+	for (let key of Object.keys(chunks)) {
+		let chunkTime = parseInt(key) * 1000
+		for (let block of Object.keys(chunks[key].log)) {
+			let time = chunkTime + parseInt(block) * 1000
+
+			if (activity == "blank") {
+				activity = chunks[key].log[block]
+				timer = time
+				continue
+			}
+
+			if (!times[activity]) {
+				times[activity] = 0
+			}
+
+			times[activity] += time - timer
+			total += time - timer
+
+			timer = time
+			activity = chunks[key].log[block]
+		}
+	}
+	let labels = Object.keys(times)
+	let labelsData = labels.map(l => l == "blank" ? "blank" : blocks.value.find(b => b.id == l).name)
+	let colorData = labels.map(l => l == "blank" ? "white" : blocks.value.find(b => b.id == l).color)
+	let numData = labels.map(l => times[l] / 1000)
+	console.log(labelsData, colorData, numData)
+	testData.value = {
+		labels: labelsData,
+		datasets: [
+			{
+				data: numData,
+				backgroundColor: colorData,
+			},
+		],
+	}
+	console.log(testData.value)
+}, {deep: true})
+
+const chartOptions = ref({
+      responsive: true,
+	  
+      plugins: {
+		  tooltip: {
+			  callbacks: {
+				  label: function(context) {
+					  return formatSeconds(context.dataset.data[context.dataIndex])
+				  }
+			  }
+		  },
+		datalabels: {
+			formatter: (value) => {
+				return formatSeconds(value);
+			}
+		},
+        legend: {
+          position: 'top',
+        },
+        title: {
+          display: true,
+          text: 'Chart.js Doughnut Chart',
+        },
+      },
+    });
 
 </script>
 
@@ -1389,7 +1665,11 @@ function startResize(e, d, start, end) {
 				<div @click="selectBlock(block)" @mousedown="startHold(block, true)" @touchstart="startHold(block)" @touchend="endHold()" class="block-background"></div>
 				
 				<div class="block-icon">
-					<i :class="(icons[alias[block.name.toLowerCase()] || block.name.toLowerCase()] || 'far fa-circle') + ' fa-5x'"></i>
+					<Icon :icon="block.icon || block.name">
+						<Dialog v-if="editing">
+							<Selector @update:modelValue="block.icon = $event.name, updateBlock(block, {icon: block.icon})" :data="selectorIcons"></Selector>
+						</Dialog>
+					</Icon>
 				</div>
 				<div v-if="block.id != editing" class="block-text">{{block.name}}</div>
 				<input v-else id="focus-input" @keypress.enter="editing = ''" class="block-text" style="pointer-events: all;" v-model="block.name" @change="updateBlock(block, {name: block.name})" />
@@ -1424,23 +1704,52 @@ function startResize(e, d, start, end) {
 		</template>
 	</div>
 
-	<div class="calendar" :class="{'active': currentTab == 'calendar'}" id="calendar-area">
-		<div class="week"><div class="week-box">Jan 9 - Jan 16</div></div>
-		<div class="days" :class="{'dragging': calendarDragging, 'resizing': isResizing}" :style="{'--zoom': calendarScale, '--x': calendarX + 'px', '--y': calendarY + 'px'}">
+	<div class="calendar" :style="{'--calendar-direction': calendarAnimatingTo}" :class="{'calendar-animating': calendarAnimating, 'active': currentTab == 'calendar'}" id="calendar-area">
+		<div class="week">
+			<div class="week-box">
+				<i @click="prevWeek()" class="fas fa-chevron-left"></i>
+				<div class="week-text">
+					{{formatDate(selectedWeek.start)}} - {{formatDate(selectedWeek.end)}}
+					<Dialog>
+						<Selector @update:modelValue="selectWeek($event)" :data="weekList"></Selector>
+					</Dialog>
+				</div>
+				<i @click="nextWeek()" class="fas fa-chevron-right"></i>
+			</div>
+		</div>
+		<div class="days swiper" :style="{'--zoom': calendarScale, '--x': calendarX + 'px', '--y': calendarY + 'px'}">
 			<div class="timeline">
 				<template v-for="h in currentDivision" :key="h">
-					<div class="hour">{{formatTime(((h - 1) / currentDivision) * 24)}}</div>
+					<div class="hour">{{formatTimeClockMode(((h - 1) / currentDivision) * 24)}}</div>
 				</template>
+				<div class="clock-24-12" @click="toggleClockMode()">
+					{{clockMode}}
+				</div>
+			</div>
+			<template v-for="d in 7" :key="d">
+				<div class="day">
+					
+				</div>
+			</template>
+		</div>
+		<div class="days" :class="{'dragging': calendarDragging, 'resizing': isResizing}" :style="{'--zoom': calendarScale, '--x': (calendarX + calendarSwipeX) + 'px', '--y': calendarY + 'px'}">
+			<div class="timeline">
+				<template v-for="h in currentDivision" :key="h">
+					<div class="hour">{{formatTimeClockMode(((h - 1) / currentDivision) * 24)}}</div>
+				</template>
+				<div class="clock-24-12" @click="toggleClockMode()">
+					{{clockMode}}
+				</div>
 			</div>
 			<template v-for="d in 7" :key="d">
 				<div class="day" :class="{'active': calendarInfo.day == d - 1}">
 					<div class="day-chunks">
 						<template v-if="currentTab == 'calendar'">
-							<template v-for="c in weekTimeChunksInView[d - 1]">
+							<template v-for="c in weekTimeChunksInView[d - 1]" :key="c.start">
 								<div @mousedown="startResize($event, d - 1, c.start, c.end)" class="time-chunk" :style="{
 										'--start': (resizingDay == d - 1 && (resizingEdge == c.start && isResizing)) ? resizingBlockTarget : c.start,
 										'--end': (resizingDay == d - 1 && (resizingEdge == c.end && isResizing)) ? resizingBlockTarget : c.end, '--color': c.block.color}"
-										:title="c.block.name + ' ' + formatTime(c.start / (60 * 60)) + ' - ' + formatTime(c.end / (60 * 60))"
+										:title="c.block.name + ' ' + formatTimeClockMode(c.start / (60 * 60)) + ' - ' + formatTimeClockMode(c.end / (60 * 60))"
 									>
 									<div v-if="(resizingDay == d - 1 && (resizingEdge == c.start && isResizing)) ? true : (calendarScale > 9 ? true :  c.end - c.start > 60 * 15)" class="time-chunk-name">
 										<svg viewBox="0 0 100 50">
@@ -1449,9 +1758,14 @@ function startResize(e, d, start, end) {
 											</text>
 										</svg>
 
-										<div class="calendar-time-btn calendar-edit-btn"><i class="fas fa-edit"></i></div>
-										<div class="calendar-time-btn calendar-add-top-btn"><i class="fas fa-plus"></i></div>
-										<div class="calendar-time-btn calendar-add-bottom-btn"><i class="fas fa-plus"></i></div>
+										<div class="calendar-time-btn calendar-edit-btn">
+											<i class="fas fa-edit"></i>
+											<Dialog>
+												<Selector @update:modelValue="updateTimeBlock(d - 1, c.start, $event.id)" :data="blocks"></Selector>
+											</Dialog>
+										</div>
+										<div class="calendar-time-btn calendar-add-top-btn" @click="addTimeBlock(d - 1, c.start, c.end, false)"><i class="fas fa-plus"></i></div>
+										<div class="calendar-time-btn calendar-add-bottom-btn" @click="addTimeBlock(d - 1, c.start, c.end, true)"><i class="fas fa-plus"></i></div>
 									</div>
 								</div>
 							</template>
@@ -1463,6 +1777,10 @@ function startResize(e, d, start, end) {
 				</div>
 			</template>
 		</div>
+	</div>
+
+	<div class="charts" :class="{'active': currentTab == 'chart'}" id="charts-area">
+		<DoughnutChart v-if="testData" :options="chartOptions" :chartData="testData" />
 	</div>
 
 	<div class="tabs-container">
@@ -1489,6 +1807,19 @@ function startResize(e, d, start, end) {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Overpass&display=swap');
 
+.clock-24-12 {
+	cursor: pointer;
+	transition: .2s;
+	position: absolute;
+	bottom: -32px;
+	width: 40px;
+	text-align: center;
+	font-family: 'Overpass', sans-serif;
+}
+
+.clock-24-12:hover {
+	color: dodgerblue;
+}
 
 .calendar-edit-btn {
 	top: calc(50% - 20px);
@@ -1536,6 +1867,31 @@ function startResize(e, d, start, end) {
 	transform: scale(1);
 }
 
+.days.swiper {
+	position: absolute;
+}
+
+.calendar-animating .days:not(.swiper) {
+	transition: .3s;
+	
+	--add-x: calc(var(--calendar-direction) * 100vw);
+}
+
+.calendar-animating .days.swiper {
+	animation: days-grow .3s ease-in-out forwards;
+}
+
+@keyframes days-grow {
+	0% {
+		opacity: 0;
+		transform: translate(calc(var(--x) + var(--add-x)), var(--y)) scale(0);
+	}
+	100% {
+		opacity: 1;
+		transform: translate(calc(var(--x) + var(--add-x)), var(--y)) scale(1);
+	}
+}
+
 .week {
 	height: calc((100vh - 600px) / 2);
     position: absolute; 
@@ -1548,15 +1904,32 @@ function startResize(e, d, start, end) {
 }
 
 .week-box {
-	padding: 10px;
 	border-radius: 6px;
 	transition: .3s;
 	cursor: pointer;
 	margin-bottom: 12px;
+
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+
+	user-select: none;
 }
 
-.week-box:hover {
-	background-color: #f5f5f5;
+.week-box i {
+	
+}
+
+.week-box > * {
+	transition: .3s;
+	height: 100%;
+	padding: 10px;
+	border-radius: 6px;
+}
+
+.week-box > *:hover {
+	background-color: #eeeeee;
 }
 
 .calendar {
@@ -1582,13 +1955,42 @@ function startResize(e, d, start, end) {
 	pointer-events: all;
 }
 
+.charts {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	background: white;
+	z-index: 19;
+	transition: .3s;
+	opacity: 0;
+	pointer-events: none;
+
+	display: block;
+	
+	overflow: hidden;
+	touch-action: none;
+
+	display: flex;
+	flex-direction: column;
+	/* align-items: center; */
+	justify-content: flex-start;
+}
+
+.charts.active {
+	opacity: 1;
+	pointer-events: all;
+}
+
 .days {
 	display: flex;
 	flex-direction: row;
 	height: calc(600px * var(--zoom));
 	/* transition: .3s; */
+	--add-x: 0px;
 	width: 80vw;
-	transform: translate(var(--x), var(--y));
+	transform: translate(calc(var(--x) + var(--add-x)), var(--y));
 	background-color: white;
 }
 
@@ -1624,12 +2026,16 @@ function startResize(e, d, start, end) {
 	transform: scale(0, 1);
 }
 
-.time-chunk:hover::after, .time-chunk:hover::before {
+.days:not(.resizing) .time-chunk:hover::after, .days:not(.resizing) .time-chunk:hover::before {
 	box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.199);
 	background-color: white;
 	border-radius: 100px;
 	box-sizing: border-box;
 	transform: scale(1, 1);
+}
+
+.days.resizing * {
+	cursor: ns-resize !important;
 }
 
 .time-chunk:hover::after {
@@ -1689,6 +2095,16 @@ function startResize(e, d, start, end) {
 	color: white;
 
 	cursor: default;
+	/* animation: grow-chunk .3s ease-in-out forwards; */
+}
+
+@keyframes grow-chunk {
+	0% {
+		transform: scale(1, 0);
+	}
+	100% {
+		transform: scale(1, 1);
+	}
 }
 
 /*.time-chunk:nth-last-child(2) {
@@ -1741,13 +2157,13 @@ function startResize(e, d, start, end) {
 	justify-content: flex-end;
 }
 
-.hour:not(:last-child)::after {
+.hour:not(:nth-last-child(2))::after {
 	content: '';
 	position: absolute;
 	bottom: 0;
 	left: -10px;
 	width: calc(100vw * 0.8 + 10px);
-	border-bottom: 1px solid rgb(212, 212, 212);
+	border-bottom: 1px solid rgb(0 0 0 / 7%);
 	z-index: 10
 }
 
@@ -2200,6 +2616,11 @@ input.block-text {
 .block .block-icon, .block .block-text {
 	pointer-events: none;
 	color: var(--contrast);
+}
+
+.editing .block-icon > i {
+	pointer-events: all;
+	cursor: pointer;
 }
 
 .block-background {

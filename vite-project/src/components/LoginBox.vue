@@ -44,7 +44,7 @@ onMounted(() => {
 		},
 
 		signInFlow: 'popup',
-		signInSuccessUrl: 'http://localhost:3000',
+		signInSuccessUrl: 'https://timebar.xyz',
 		tosUrl: '',
 		privacyPolicyUrl: ''
 	});

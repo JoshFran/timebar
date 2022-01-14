@@ -1,5 +1,4 @@
 export default {
-    "ad": "fas fa-ad",
     "address-book": "fas fa-address-book",
     "address-card": "fas fa-address-card",
     "adjust": "fas fa-adjust",
