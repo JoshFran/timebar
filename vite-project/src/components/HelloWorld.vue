@@ -1,9 +1,10 @@
 <script setup>
-import { format, getDay, getTime, getWeek, startOfWeek, endOfWeek, subWeeks, addWeeks, startOfDay, subDays, addDays } from 'date-fns'
+import { format, getDay, getTime, getWeek, startOfWeek, endOfWeek, subWeeks, addWeeks, endOfDay, startOfDay, subDays, addDays, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears } from 'date-fns'
 
 import { getFirestore, collection, onSnapshot, doc, getDoc, setDoc, updateDoc, arrayRemove, arrayUnion, deleteField } from "firebase/firestore";
+import { logEvent } from "firebase/analytics";
 
-import { DoughnutChart, useDoughnutChart } from "vue-chart-3"
+import { DoughnutChart, useDoughnutChart, BarChart } from "vue-chart-3"
 import { Chart, registerables } from "chart.js"
 import ChartDataLabels from 'chartjs-plugin-datalabels'
 Chart.register(ChartDataLabels)
@@ -20,6 +21,8 @@ import interact from 'interactjs'
 import invert from 'invert-color'
 
 import icons from "../icons"
+import { auth } from 'firebaseui';
+
 
 
 defineProps({
@@ -59,7 +62,18 @@ const snappedPosition = ref({
 	y: 0
 })
 
+function trackEvent(name, d) {
+	logEvent(window.timebar.analytics, name, d)
+}
+
+let ignoreSnap = false
+
 watch(snappedPosition, (nv) => {
+	if (ignoreSnap) {
+		ignoreSnap = false
+		return
+	}
+	console.log("snappedPosition", nv)
 	startTracking(getClosestBlock(snappedPosition.value.x, snappedPosition.value.y))
 }, {deep: true})
 
@@ -210,6 +224,74 @@ let focusScaleLerp = ref(0)
 
 let oldTransforms = {}
 
+const timeRanges = ref([])
+
+function getNow() {
+	return Date.now()
+}
+
+function updateRanges() {
+	let minTime = user.value ? parseInt(user.value.metadata.createdAt) : getNow()
+	let maxTime = getNow()
+	console.log(new Date(minTime), new Date(maxTime))
+
+	timeRanges.value = [
+		{
+			name: "Today",
+			start: Math.max(getTime(startOfDay(new Date())), minTime),
+			end: Math.min(getTime(endOfDay(new Date())), maxTime)
+		},
+		{
+			name: "Yesterday",
+			start: Math.max(getTime(startOfDay(subDays(new Date(), 1))), minTime),
+			end: Math.min(getTime(endOfDay(subDays(new Date(), 1))), maxTime)
+		},
+		{
+			name: "This Week",
+			start: Math.max(getTime(startOfWeek(new Date())), minTime),
+			end: Math.min(getTime(endOfWeek(new Date())), maxTime)
+		},
+		{
+			name: "Last Week",
+			start: Math.max(getTime(startOfWeek(subWeeks(new Date(), 1))), minTime),
+			end: Math.min(getTime(endOfWeek(subWeeks(new Date(), 1))), maxTime)
+		},
+		{
+			name: "This Month",
+			start: Math.max(getTime(startOfMonth(new Date())), minTime),
+			end: Math.min(getTime(endOfMonth(new Date())), maxTime)
+		},
+		{
+			name: "Last Month",
+			start: Math.max(getTime(startOfMonth(subMonths(new Date(), 1))), minTime),
+			end: Math.min(getTime(endOfMonth(subMonths(new Date(), 1))), maxTime)
+		},
+		{
+			name: "This Year",
+			start: Math.max(getTime(startOfYear(new Date())), minTime),
+			end: Math.min(getTime(endOfYear(new Date())), maxTime)
+		},
+		{
+			name: "Last Year",
+			start: Math.max(getTime(startOfYear(subYears(new Date(), 1))), minTime),
+			end: Math.min(getTime(endOfYear(subYears(new Date(), 1))), maxTime)
+		},
+		{
+			name: "All Time",
+			start: Math.max(getTime(new Date(0)), minTime),
+			end: Math.min(getTime(new Date()), maxTime)
+		}
+	]
+}
+
+watch([user], () => {
+	console.log("User changed")
+	updateRanges()
+}, {deep: true})
+
+updateRanges()
+const currentChartRange = ref(timeRanges.value[0])
+
 function getBlockTransform(block) {
 	let dist = Math.max(Math.abs(block.y - position.value.y), Math.abs(block.x - position.value.x))
 	let xdist = Math.abs(block.x - position.value.x);
@@ -294,6 +376,8 @@ document.addEventListener("keydown", e => {
 
 document.addEventListener("keyup", e => {
 	// Arrow keys for position movement
+	if (currentTab.value != "tracking") return
+	if (e.target.closest("input")) return
 	let t = false
 	if (e.keyCode === 37) {
 		position.value.x--
@@ -401,6 +485,8 @@ function setSetting(name, value) {
 }
 
 async function deleteBlock(block) {
+	trackEvent("delete_block")
+
 	if (blocks.value.length == 1) {
 		return
 	}
@@ -430,15 +516,24 @@ function snapPosition() {
 }
 
 function selectTab(t) {
+	trackEvent("select_tab", {name: t})
 	currentTab.value = t
 	gridMode.value = false
+	if (t == "chart") {
+		currentChartRange.value = timeRanges.value[0]
+	}
 }
 
+let lastSelectedTime = 0
+
 function selectBlock(block) {
+	lastSelectedTime = Date.now()
 	if (editing.value || gridMode.value) return
 
 	position.value.x = block.x
 	position.value.y = block.y
+
+	trackEvent("select_block")
 
 	updateGlobal()
 }
@@ -467,6 +562,7 @@ function startHold(block, isClick) {
 
 	clearTimeout(holdTimeout)
 	holdTimeout = setTimeout(() => {
+		trackEvent("hold_block")
 		editing.value = block.id
 		setTimeout(() => {
 			//document.querySelector("#focus-input").focus()
@@ -498,24 +594,60 @@ function getBlockIndex(id) {
 	return null
 }
 
-function initChunk() {
+async function initChunk(first) {
 	let c = getCurrentChunk()
-	let cref = getChunkRef()
-	setDoc(cref, {
-		created: Date.now(),
-		log: {}
+	trackEvent("init_chunk", {
+		first: first,
+		time: c
 	})
+	let cref = getChunkRef()
+	let data = {
+		created: getNow()
+	}
+	if (first) {
+		data.log = {
+			[Math.floor(getNow() / 1000) - c]: "aa"
+		}
+	}
+	await setDoc(cref, data)
 }
+
+const userMenu = computed(() => {
+	if (!user.value) {
+		return [
+			{name: "Login", icon: "sign-in-alt"}
+		]
+	}else{
+		let x = [
+			{name: "Logout", icon: "sign-out-alt"}
+		]
+
+		if (user.value.isAnonymous)
+			x.unshift({name: "Save", icon: "cloud-upload-alt"})
+
+		x.unshift({name: user.value.displayName || "Anonymous", icon: "user"})
+		return x
+	}
+})
 
 function refreshConnection(u) {
 	user.value = u;
 	if (u) {
+		console.log("Refreshing connection")
+		updateRanges()
+		if (u.isAnonymous) {
+			if (parseInt(u.metadata.createdAt) < getNow() - 10 * 1000) {
+				trackEvent("show_should_upgrade")
+				shouldUpgradeAccount.value = true
+			}
+		}
 		const unsubscribe = onSnapshot(doc(db, "users", user.value.uid), snapshot => {
 			isProfileWatched.value = true
 			let d = snapshot.data()
 			
 			if (d) {
 				isInitialized.value = true
+				console.log("Loaded blocks ", blocks.value)
 				blocks.value = Object.keys(d.blocks).map(id => d.blocks[id])
 				profileData.value = d
 			}
@@ -527,21 +659,29 @@ function refreshConnection(u) {
 
 		const unsub2 = onSnapshot(cref, snapshot => {
 			isProfileWatched.value = true
-			let d = snapshot.data()
 			
-			if (d) {
+			if (snapshot.exists()) {
+				let d = snapshot.data()
 				currentChunk.value = d
+				if (!currentChunk.value.log) {
+					currentChunk.value.log = {}
+				}
 
 				if (currentTracking.value) {
 					let b = getBlockById(currentTracking.value.block)
-					if (justStarted) {
+					if (justStarted || lastSelectedTime < Date.now() - 1000 * 5) {
 						justStarted = false
 						if (b) {
-							selectBlock(b)
+							ignoreSnap = true
+							snappedPosition.value.x = b.x
+							snappedPosition.value.y = b.y
+							position.value.x = b.x
+							position.value.y = b.y
 						}
 					}
 				}
 			}else{
+				console.log("Creating new chunk")
 				initChunk()
 			}
 		});
@@ -566,6 +706,7 @@ function findMiddle() {
 }
 
 function enterGridMode() {
+	trackEvent("enter_grid_mode")
 	gridMode.value = true
 	/*let p = findMiddle()
 	position.value.x = p.x
@@ -589,6 +730,7 @@ let saveTimeout = null
 let updates = []
 
 function updateBlock(block, v) {
+	trackEvent("update_block")
 	clearTimeout(saveTimeout)
 	updates.push({block, value: v})
 	for (let k of Object.keys(v)) {
@@ -669,6 +811,13 @@ window.addEventListener("mousewheel", (e) => {
 
 const calendarInfo = computed(() => {
 	let d = new Date()
+
+	if (window.innerWidth < 900) {
+		return {
+			week: getWeek(d),
+			day: getDay(new Date(selectedWeek.value.start))
+		}
+	}
 
 	return {
 		week: getWeek(d),
@@ -891,10 +1040,23 @@ function getProfRef() {
 }
 
 let linearLog = computed(() => {
-	if (currentChunk.value)
+	if (currentChunk.value && currentChunk.value.log)
 		return Object.keys(currentChunk.value.log).map(key => [parseInt(key), currentChunk.value.log[key]]).sort((a, b) => a[0] - b[0])
 
 	return []
+})
+
+let latestTracking = computed(() => {
+	let cc = floorToChunk(getNow())
+	if (currentChunk.value && currentChunk.value.log) {
+		let x = Object.keys(currentChunk.value.log).map(a => parseInt(a)).sort((a, b) => a - b)
+		if (x.length > 0) {
+			return [cc * 1000 + x[x.length - 1] * 1000, currentChunk.value.log[x[x.length - 1]]]
+		}
+	}
+
+	let cid = floorToChunk(getNow())
+	return [0, "aa"]
 })
 
 function getLogItemIndex(time) {
@@ -902,23 +1064,28 @@ function getLogItemIndex(time) {
 }
 
 function getCurrentChunk() {
-	let n = Date.now()
+	let n = getNow()
 	return (Math.floor(n / (1000 * 60 * 60 * 24 * 14)) * (60 * 60 * 24 * 14)).toString()
 }
 
 function getCurrentTime() {
 	let c = getCurrentChunk()
-	let n = Date.now()
+	let n = getNow()
 	return Math.floor(n / 1000) - c
 }
 
-const currentTracking = computed(() => {
-	let log = linearLog.value
-	if (log.length == 0) {
-		return null
-	}
-	let last = log[log.length - 1]
+function currentRealTime() {
+	return getNow()
+}
 
+const currentTracking = computed(() => {
+	// let log = linearLog.value
+	// if (log.length == 0) {
+	// 	return null
+	// }
+	// let last = log[log.length - 1]
+
+	let last = latestTracking.value
 	return {
 		time: last[0],
 		block: last[1]
@@ -928,6 +1095,10 @@ const currentTracking = computed(() => {
 let trackingTimeout = null
 
 function startTracking(block) {
+	trackEvent("start_tracking", {
+		name: block.name
+	})
+
 	let cref = getChunkRef()
 	let log = linearLog.value
 	let t = getCurrentTime()
@@ -962,6 +1133,179 @@ function getChunkRef() {
 	return doc(db, "users", user.value.uid, "chunks", m)
 }
 
+let templates = {
+	"58": {
+		"id": "58",
+		"y": 1,
+		"x": -3,
+		"name": "reddit",
+		"color": "#2196f3"
+	},
+	"hd": {
+		"name": "youtube",
+		"color": "#2196f3",
+		"y": 0,
+		"id": "hd",
+		"x": -3
+	},
+	"fr": {
+		"id": "fr",
+		"color": "#673ab7",
+		"x": 3,
+		"name": "eating",
+		"y": 0
+	},
+	"pd": {
+		"x": -1,
+		"y": 3,
+		"name": "groceries",
+		"id": "pd",
+		"color": "#f44336"
+	},
+	"zk": {
+		"color": "#8bc34a",
+		"y": -4,
+		"x": 0,
+		"name": "email",
+		"id": "zk"
+	},
+	"mo": {
+		"y": 2,
+		"id": "mo",
+		"name": "dishes",
+		"color": "#f44336",
+		"x": 0
+	},
+	"0p": {
+		"y": -3,
+		"name": "meeting",
+		"id": "0p",
+		"x": 1,
+		"color": "#8bc34a"
+	},
+	"bq": {
+		"id": "bq",
+		"name": "Home Improvement",
+		"x": 0,
+		"color": "#f44336",
+		"y": 4,
+		"icon": "hammer"
+	},
+	"8r": {
+		"x": 0,
+		"name": "working",
+		"id": "8r",
+		"icon": "briefcase",
+		"y": -3,
+		"color": "#8bc34a"
+	},
+	"oc": {
+		"name": "admin",
+		"color": "#8bc34a",
+		"y": -3,
+		"id": "oc",
+		"x": -1
+	},
+	"bp": {
+		"id": "bp",
+		"y": 0,
+		"x": -4,
+		"color": "#2196f3",
+		"name": "twitter"
+	},
+	"zc": {
+		"x": -5,
+		"y": -1,
+		"id": "zc",
+		"color": "#2196f3",
+		"name": "gaming"
+	},
+	"8m": {
+		"color": "#2196f3",
+		"name": "facebook",
+		"y": -1,
+		"x": -3,
+		"id": "8m"
+	},
+	"bi": {
+		"y": 1,
+		"id": "bi",
+		"color": "#673ab7",
+		"x": 3,
+		"name": "brushing"
+	},
+	"dz": {
+		"color": "#673ab7",
+		"x": 3,
+		"id": "dz",
+		"name": "shower",
+		"y": -1
+	},
+	"lh": {
+		"name": "bathroom",
+		"id": "lh",
+		"x": 2,
+		"y": 0,
+		"color": "#673ab7"
+	},
+	"gk": {
+		"name": "tiktok",
+		"id": "gk",
+		"y": 0,
+		"color": "#2196f3",
+		"x": -2
+	},
+	"so": {
+		"y": -2,
+		"x": 0,
+		"color": "#8bc34a",
+		"id": "so",
+		"name": "learning"
+	},
+	"aa": {
+		"y": 0,
+		"name": "sleeping",
+		"id": "aa",
+		"color": "#7a7a7a",
+		"x": 0
+	},
+	"rk": {
+		"id": "rk",
+		"name": "cooking",
+		"x": 4,
+		"color": "#673ab7",
+		"y": 0
+	},
+	"zq": {
+		"name": "tv",
+		"y": 2,
+		"color": "#2196f3",
+		"id": "zq",
+		"x": -4
+	},
+	"ab": {
+		"y": 1,
+		"name": "internet",
+		"color": "#2196f3",
+		"x": -5,
+		"id": "ab"
+	},
+	"8q": {
+		"x": 0,
+		"name": "cleaning",
+		"color": "#f44336",
+		"id": "8q",
+		"y": 3
+	},
+	"gn": {
+		"x": 1,
+		"name": "shopping",
+		"id": "gn",
+		"color": "#f44336",
+		"y": 3
+	}
+}
+
 function initUser(useTemplate) {
 	creatingUser.value = true
 	setTimeout(async () => {
@@ -969,7 +1313,7 @@ function initUser(useTemplate) {
 		let dRef = getProfRef()
 		await setDoc(dRef, {
 			name: "",
-			blocks: {
+			blocks: useTemplate ? templates : {
 				"aa": {
 					id: 'aa',
 					x: 0,
@@ -978,8 +1322,9 @@ function initUser(useTemplate) {
 					color: "#2196f3",
 				}
 			},
-			created: Date.now(),
+			created: getNow(),
 		})
+		await initChunk(true)
 		creatingUser.value = false
 		isInitialized.value = true
 
@@ -1020,6 +1365,8 @@ function getNewId() {
 }
 
 async function addBlock(x, y) {
+	trackEvent("add_block")
+
 	let dRef = getProfRef()
 	let id = getNewId()
 	await updateDoc(dRef, {
@@ -1039,10 +1386,10 @@ async function addBlock(x, y) {
 }
 
 const isDeleting = ref(false)
-const currentTimeUpdating = ref(getCurrentTime())
+const currentTimeUpdating = ref(currentRealTime())
 
 setInterval(() => {
-	currentTimeUpdating.value = getCurrentTime()
+	currentTimeUpdating.value = currentRealTime()
 }, 1000)
 
 document.addEventListener("mouseup", () => {
@@ -1159,8 +1506,11 @@ async function deleteKeyInChunk(time, key) {
 async function getLatestTimeLog(time) {
 	let c = await getChunkForTime(time)
 	let ctime = floorToChunk(time)
+	let rtime = time / 1000 - ctime
 	if (c) {
-		let log = Object.keys(c.log).map(v => [parseInt(v), c.log[v]]).sort((a, b) => a[0] - b[0])
+		let log = Object.keys(c.log).map(v => [parseInt(v), c.log[v]])
+		.filter(v => v[0] <= rtime)
+		.sort((a, b) => a[0] - b[0])
 		if (log.length > 0) {
 			return {
 				log: log[log.length - 1],
@@ -1171,8 +1521,11 @@ async function getLatestTimeLog(time) {
 
 	let cBack = await getChunkForTime(time - (1000 * 60 * 60 * 24 * 14))
 	ctime = floorToChunk(time - (1000 * 60 * 60 * 24 * 14))
+	rtime = time / 1000 - ctime
 	if (cBack) {
-		let log = Object.keys(cBack.log).map(v => [parseInt(v), cBack.log[v]]).sort((a, b) => a[0] - b[0])
+		let log = Object.keys(cBack.log).map(v => [parseInt(v), cBack.log[v]])
+		.filter(v => v[0] <= rtime)
+		.sort((a, b) => a[0] - b[0])
 		if (log.length > 0) {
 			return {
 				log: log[log.length - 1],
@@ -1223,9 +1576,10 @@ async function getLogForDay(day) {
 					return []
 				}
 
-				if (day > Date.now()) {
+				if (day > getNow()) {
 					return []
 				}
+
 				
 				if (lastActivity.chunk + lastActivity.log[0] > dayInSeconds + 24 * 60 * 60) {
 					return [
@@ -1233,10 +1587,9 @@ async function getLogForDay(day) {
 						[dayInSeconds - chunkStart + 60 * 60 * 24, lastActivity.log[1]],
 					]
 				}else{
-					console.log(lastActivity)
 					return [
 						[dayInSeconds - chunkStart, lastActivity.log[1]],
-						//[dayInSeconds - chunkStart + (Date.now() - day) / 1000, lastActivity.log[1]]
+						//[dayInSeconds - chunkStart + (getNow() - day) / 1000, lastActivity.log[1]]
 					]
 				}
 			}
@@ -1318,7 +1671,7 @@ function selectWeek(time) {
 const chartRange = ref(1)
 
 watch([selectedWeek, currentChunk], async () => {
-	let sow = getTime(selectedWeek.value.start)
+	let sow = getTime(startOfWeek(new Date(selectedWeek.value.start)))
 	let days = []
 	let dbefore = await getLogForDay(sow - 24 * 60 * 60 * 1000)
 	for (let i = 0; i < 7; i++) {
@@ -1334,7 +1687,7 @@ watch([selectedWeek, currentChunk], async () => {
 
 		let parts = []
 		for (let j = 0; j < d.length; j++) {
-			let e = Math.min(Date.now() / 1000 - floorToChunk(startOfDay), startOfDayChunk + 24 * 60 * 60)
+			let e = Math.min(getNow() / 1000 - floorToChunk(startOfDay), startOfDayChunk + 24 * 60 * 60)
 			if (j < d.length - 1) {
 				e = d[j + 1][0]
 			}
@@ -1349,6 +1702,7 @@ watch([selectedWeek, currentChunk], async () => {
 
 		dbefore = d
 	}
+
 	weekTimeChunks.value = days
 }, {deep: true})
 
@@ -1441,6 +1795,8 @@ function setResizeTarget(clientY) {
 }
 
 function confirmResize() {
+	trackEvent("time_resize")
+
 	let i = getLogItemIndex(resizingEdgeChunkTime.value)
 	let key = resizingEdgeChunkTime.value.toString()
 
@@ -1464,11 +1820,14 @@ function currentWeekdayAndTimeToChunkTime(day, time) {
 }
 
 function startResize(e, d, start, end) {
-	let rect = e.currentTarget.getBoundingClientRect()
+	let t = e.currentTarget || e.target
+	let clientX = e.clientX || e.touches[0].clientX
+	let clientY = e.clientY || e.touches[0].clientY
+	let rect = t.getBoundingClientRect()
 	let direction = false
-	if (e.clientY < rect.top + 8) {
+	if (clientY < rect.top + 8) {
 		direction = false
-	}else if (e.clientY > rect.bottom - 8) {
+	}else if (clientY > rect.bottom - 8) {
 		direction = true
 	}else{
 		return
@@ -1490,7 +1849,7 @@ function startResize(e, d, start, end) {
 
 	isResizing.value = true
 
-	let v = setResizeTarget(e.clientY)
+	let v = setResizeTarget(clientY)
 	if (!v) {
 		isResizing.value = false
 	}
@@ -1533,12 +1892,25 @@ const dataValues = ref([30, 40, 60, 70, 5]);
 const toggleLegend = ref(true);
 
 const testData = ref(null)
-watch([chartRange, currentChunk], async () => {
+const stackedChart = ref(null)
+watch([currentChartRange, currentChunk], async () => {
+
+	let blockIntervals = [{}]
+	let interval = 24 * 60 * 60 * 1000
+	if (currentChartRange.value.name != "Today")
+		trackEvent("chart", {
+			name: currentChartRange.value.name
+		})
+	
+	let rangeTime = currentChartRange.value.end - currentChartRange.value.start
+	
+	if (rangeTime > 1000 * 60 * 60 * 24 * 30) {
+		interval = 7 * 24 * 60 * 60 * 1000
+	}
 
 	let times = {}
-	let range = chartRange.value
-	let start = getTime(subWeeks(startOfWeek(new Date()), range))
-	let end = getTime(endOfWeek(new Date()))
+	let start = currentChartRange.value.start
+	let end = currentChartRange.value.end
 
 	let chunks = {}
 
@@ -1554,11 +1926,23 @@ watch([chartRange, currentChunk], async () => {
 	let timer = start
 	let activity = "blank"
 	let total = 0
+	let closest = 0
+	let closestDistance = 0
+	let asc = (a, b) => a - b
+	let pInt = (a) => parseInt(a)
 
-	for (let key of Object.keys(chunks)) {
-		let chunkTime = parseInt(key) * 1000
-		for (let block of Object.keys(chunks[key].log)) {
-			let time = chunkTime + parseInt(block) * 1000
+	for (let key of Object.keys(chunks).map(pInt).sort(asc)) {
+		let chunkTime = key * 1000
+		if (chunks[key].log)
+		for (let block of Object.keys(chunks[key].log).map(pInt).sort(asc)) {
+			let time = chunkTime + block * 1000
+
+			if (time < start || time > end) {
+				if (time < start) {
+					activity = chunks[key].log[block]
+				}
+				continue
+			}
 
 			if (activity == "blank") {
 				activity = chunks[key].log[block]
@@ -1577,21 +1961,46 @@ watch([chartRange, currentChunk], async () => {
 			activity = chunks[key].log[block]
 		}
 	}
+
+	if (Object.keys(times).length == 0) {
+		console.log("Hit")
+	}
+	let e = Math.min(end, getNow())
+	if (timer < e) {
+		if (!times[activity]) {
+			times[activity] = 0
+		}
+
+		times[activity] += e - timer
+		total += e - timer
+	}
+
 	let labels = Object.keys(times)
-	let labelsData = labels.map(l => l == "blank" ? "blank" : blocks.value.find(b => b.id == l).name)
-	let colorData = labels.map(l => l == "blank" ? "white" : blocks.value.find(b => b.id == l).color)
+	let labelsData = labels.map(l => {
+		if (l == "blank") { return "blank" }
+		let b = blocks.value.find(b => b.id == l)
+		if (b) return b.name
+		return "Unknown"
+	})
+	let colorData = labels.map(l => {
+		if (l == "blank") { return "#fff" }
+		let b = blocks.value.find(b => b.id == l)
+		if (b) return b.color
+		return "#fff"
+	})
 	let numData = labels.map(l => times[l] / 1000)
-	console.log(labelsData, colorData, numData)
+	
 	testData.value = {
 		labels: labelsData,
 		datasets: [
 			{
+				labels: labelsData,
 				data: numData,
 				backgroundColor: colorData,
 			},
 		],
 	}
-	console.log(testData.value)
+	
 }, {deep: true})
 
 const chartOptions = ref({
@@ -1601,30 +2010,72 @@ const chartOptions = ref({
 		  tooltip: {
 			  callbacks: {
 				  label: function(context) {
-					  return formatSeconds(context.dataset.data[context.dataIndex])
+					  return " " + context.label + " " + formatSeconds(context.dataset.data[context.dataIndex])
 				  }
 			  }
 		  },
 		datalabels: {
-			formatter: (value) => {
-				return formatSeconds(value);
-			}
+			color(context) {
+				return invert(context.dataset.backgroundColor[context.dataIndex], true)
+			},
+			formatter: (value, context) => {
+				return context.dataset.labels[context.dataIndex]
+			},
+			display: "auto"
 		},
         legend: {
           position: 'top',
         },
         title: {
           display: true,
-          text: 'Chart.js Doughnut Chart',
+          text: "Activity Distribution",
         },
       },
     });
 
+const permLogin = ref(false)
+
+const loginBox = ref(null)
+
+function upgradeAccount() {
+	trackEvent("try_upgrade")
+	loginBox.value.linkToPermanentAccount()
+}
+
+function userAction(d) {
+	if (d.name == "Logout") {
+		trackEvent("logout")
+		window.timebar.auth.signOut()
+		setTimeout(() => {
+			window.location.reload()
+		}, 450)
+	} else if (d.name == "Save") {
+		upgradeAccount()
+	}
+}
+
+const shouldUpgradeAccount = ref(false)
+
 </script>
 
 <template>
-	<login-box @setUser="refreshConnection($event)"></login-box>
+	<login-box ref="loginBox" @setUser="refreshConnection($event)"></login-box>
 	
+	<div class="anonymous-modal modal" :class="{'open': shouldUpgradeAccount}">
+		<div class="modal-content">
+			<h1 class="big-title">Save Your Data</h1>
+			<p>
+				Hey! Remember when you chose to sign in later? Well, now's the time.
+				<br>
+				Please sign in via Google, or Email to save your data permanently.
+			</p>
+			<div class="btn-bar">
+				<div class="btn" @click="shouldUpgradeAccount = false" style="--color: #e91e63">Sign-in later<i class="fas fa-arrow-right"></i></div>
+				<div class="btn" @click="upgradeAccount()">Sign-in now<i class="fas fa-cloud-upload-alt"></i></div>
+			</div>
+		</div>
+	</div>
+
 	<div class="grid-drop-zone" :class="{'open': currentHolding, 'active': isDeleting}"><i class="fas fa-trash"></i></div>
 	<div class="back-drop" :class="{'active': !!editing}" @click="editing = ''"></div>
 	<div class="init-modal modal" :class="{'open': isProfileWatched && !isInitialized}">
@@ -1683,7 +2134,7 @@ const chartOptions = ref({
 				:style="{
 					...computedTransforms[getBlockIndex(currentTracking.block)]
 				}">
-				{{formatSeconds(currentTimeUpdating - currentTracking.time)}}
+				{{formatSeconds(Math.floor((currentTimeUpdating - currentTracking.time) / 1000))}}
 			</div>
 		</template>
 
@@ -1746,7 +2197,7 @@ const chartOptions = ref({
 					<div class="day-chunks">
 						<template v-if="currentTab == 'calendar'">
 							<template v-for="c in weekTimeChunksInView[d - 1]" :key="c.start">
-								<div @mousedown="startResize($event, d - 1, c.start, c.end)" class="time-chunk" :style="{
+								<div @touchstart="startResize($event, d - 1, c.start, c.end)" @mousedown="startResize($event, d - 1, c.start, c.end)" class="time-chunk" :style="{
 										'--start': (resizingDay == d - 1 && (resizingEdge == c.start && isResizing)) ? resizingBlockTarget : c.start,
 										'--end': (resizingDay == d - 1 && (resizingEdge == c.end && isResizing)) ? resizingBlockTarget : c.end, '--color': c.block.color}"
 										:title="c.block.name + ' ' + formatTimeClockMode(c.start / (60 * 60)) + ' - ' + formatTimeClockMode(c.end / (60 * 60))"
@@ -1780,10 +2231,28 @@ const chartOptions = ref({
 	</div>
 
 	<div class="charts" :class="{'active': currentTab == 'chart'}" id="charts-area">
-		<DoughnutChart v-if="testData" :options="chartOptions" :chartData="testData" />
+		<div class="panel">
+			<div class="select-bar">
+				{{currentChartRange.name}}
+				<Dialog>
+					<Selector v-model="currentChartRange" :data="timeRanges"></Selector>
+				</Dialog>
+			</div>
+		</div>
+		<template v-if="currentTab == 'chart'">
+			<div class="chart-row">
+				<DoughnutChart v-if="testData" :options="chartOptions" class="chart" :chartData="testData" />
+				<BarChart v-if="stackedChart" :options="chartOptions" class="chart" :chartData="stackedChart" />
+			</div>
+		</template>
 	</div>
 
 	<div class="tabs-container">
+	<div class="tabs edit-tab" v-if="currentTab == 'tracking'">
+		<div @click="gridMode ? exitGridMode() : enterGridMode()" class="tab" :class="{'active': gridMode}">
+			<div class="tab-icon"><i class="fas fa-edit"></i></div>
+		</div>
+	</div>
 	<div class="tabs">
 		<div class="tab" @click="selectTab('tracking')" :class="{'active': currentTab == 'tracking'}">
 			<div class="tab-icon"><i class="fas fa-stopwatch"></i></div>
@@ -1797,8 +2266,14 @@ const chartOptions = ref({
 			<div class="tab-icon"><i class="fas fa-chart-pie"></i></div>
 			<div class="tab-text">Charts</div>
 		</div>
-		<div @click="gridMode ? exitGridMode() : enterGridMode()" class="tab" :class="{'active': gridMode}">
-			<div class="tab-icon"><i class="fas fa-edit"></i></div>
+		<div class="tab" :class="{'has-photo': user && user.photoURL}">
+			<Dialog>
+				<Selector :hide-search="true" @update:modelValue="userAction($event)" :data="userMenu"></Selector>
+			</Dialog>
+			<div class="tab-icon">
+				<i v-if="!user || !user.photoURL" class="fas fa-user"></i>
+				<img :src="user.photoURL" v-else />
+			</div>
 		</div>
 	</div>
 	</div>
@@ -1806,6 +2281,74 @@ const chartOptions = ref({
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Overpass&display=swap');
+
+p {
+	line-height: 1.6em;
+}
+
+.btn {
+	cursor: pointer;
+	border: none;
+	--color: dodgerblue;
+	background: var(--color);
+	border-radius: 8px;
+	
+	outline: none;
+	padding: 10px;
+	margin: 5px;
+	font-size: 1em;
+	color: rgb(255, 255, 255);
+	font-family: 'Overpass', sans-serif;
+	transition: all .3s;
+	transform: translate(0px, 0px);
+	will-change: transform;
+	user-select: none;
+}
+
+.btn:hover {
+	filter: brightness(1.1);
+	transform: translate(0px, -2px);
+	box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.2);
+}
+
+.btn:active {
+	filter: brightness(.9);
+	transform: translate(0px, 0px) scale(0.95);
+}
+
+.btn > i {
+	margin-left: 12px;
+}
+
+.chart-row {
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	align-items: center;
+	padding: 0.5em;
+}
+
+@media (max-width: 900px) {
+	.chart-row {
+		flex-direction: column;
+	}
+}
+
+.chart, .panel {
+	border-radius: 12px;
+	box-shadow: 0px 3px 6px rgba(0, 0, 0, 0);
+	padding: 10px;
+	/* filter: drop-shadow(0px 3px 6px rgba(0, 0, 0, 0.2)); */
+	transition: .3s;
+	transform: translate(0px, 0px);
+	background-color: #ffffff;
+	margin: 20px;
+}
+
+.chart:hover {
+	box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.2);
+	transform: translate(0px, -6px);
+}
 
 .clock-24-12 {
 	cursor: pointer;
@@ -1932,6 +2475,21 @@ const chartOptions = ref({
 	background-color: #eeeeee;
 }
 
+.select-bar {
+	margin: 10px;
+	transition: .3s;
+	padding: 10px;
+	border-radius: 6px;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.select-bar:hover {
+	background-color: #eeeeee;
+}
+
 .calendar {
 	position: fixed;
 	top: 0;
@@ -1941,17 +2499,18 @@ const chartOptions = ref({
 	background: white;
 	z-index: 19;
 	transition: .3s;
-	opacity: 0;
+	opacity: 1;
 	pointer-events: none;
 
 	display: block;
 	
 	overflow: hidden;
 	touch-action: none;
+	top: 100vh;
 }
 
 .calendar.active {
-	opacity: 1;
+	top: 0px;
 	pointer-events: all;
 }
 
@@ -1961,10 +2520,11 @@ const chartOptions = ref({
 	left: 0;
 	width: 100vw;
 	height: 100vh;
-	background: white;
+	background: rgb(236, 236, 236);
 	z-index: 19;
 	transition: .3s;
-	opacity: 0;
+	opacity: 1;
+	top: 100vh;
 	pointer-events: none;
 
 	display: block;
@@ -1974,12 +2534,12 @@ const chartOptions = ref({
 
 	display: flex;
 	flex-direction: column;
-	/* align-items: center; */
+	align-items: center;
 	justify-content: flex-start;
 }
 
 .charts.active {
-	opacity: 1;
+	top: 0px;
 	pointer-events: all;
 }
 
@@ -2130,6 +2690,31 @@ const chartOptions = ref({
 	z-index: 10;
 }
 
+@keyframes grow-in {
+	0% {
+		transform: scale(0, 0);
+	}
+	100% {
+		transform: scale(1, 1);
+	}
+}
+
+.edit-tab {
+	position: fixed;
+	right: 40px;
+	top: 40px;
+	left: unset !important;
+	width: unset !important;
+	border-radius: 16px !important;
+	animation: grow-in .3s ease-in-out forwards;
+}
+
+.edit-tab > .tab {
+	width: 50px;
+	height: 50px;
+	padding: 0;
+}
+
 .tabs-container {
 	position: fixed;
 	bottom: 0;
@@ -2202,8 +2787,31 @@ const chartOptions = ref({
 	box-shadow: 0px 0px 10px rgba(0,0,0,0.2);
 }
 
-.tab-icon:not(:only-child) {
-	margin-right: 20px;
+@media (max-width: 900px) {
+	.tab.active {
+		box-shadow: none;
+	}
+}
+
+.tab-text {
+	margin-left: 20px;
+}
+
+.tab.has-photo {
+	/* height: 40px; */
+	padding: 0 6px !important;
+}
+
+.tab.has-photo .tab-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.tab-icon > img {
+	max-height: 40px;
+	border-radius: 100px;
+	left: -20px;
 }
 
 @media (max-width: 900px) {
@@ -2217,7 +2825,7 @@ const chartOptions = ref({
 	}
 
 	.tab {
-		padding: 15px 10px;
+		/* padding: 15px 10px; */
 		margin: 0px;
 		font-size: 20px;
 		border-radius: 0px;
@@ -2225,11 +2833,11 @@ const chartOptions = ref({
 	}
 
 	.tab-icon:not(:only-child) {
-		margin-right: 5px;
+		/* margin-right: 5px; */
 	}
 }
 
-@media (max-width: 394px) {
+@media (max-width: 900px) {
 	.tab-text {
 		display: none;
 	}
@@ -2363,6 +2971,8 @@ div.big-btn.disabled {
 }
 
 .modal {
+	font-family: 'Overpass', sans-serif;
+	font-size: 18px;
 	position: fixed;
 	top: 0%;
 	left: 0%;

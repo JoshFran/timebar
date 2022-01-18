@@ -1,5 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
+import firebase from "firebase/compat/app";
+
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, EmailAuthProvider } from "firebase/auth";
 // TODO: Add SDKs for Firebase products that you want to use
@@ -18,7 +20,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const fapp = initializeApp(firebaseConfig);
+const fapp = firebase.initializeApp(firebaseConfig);
 const analytics = getAnalytics(fapp);
 const auth = getAuth(fapp);
 

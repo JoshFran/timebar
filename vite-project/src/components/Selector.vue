@@ -5,9 +5,10 @@ import Icon from './Icon.vue'
 
 const query = ref("")
 
-const { modelValue, data } = defineProps({
-	modelValue: String,
-	data: Array
+const { modelValue, data, hideSearch } = defineProps({
+	modelValue: [String, Object],
+	data: Array,
+	hideSearch: Boolean,
 })
 const emit = defineEmits([
 	"update:modelValue"
@@ -37,18 +38,29 @@ function selectVal(item) {
 	emit('update:modelValue', item)
 }
 
+function isSelected(item) {
+	if (!modelValue)
+		return false
+	
+	if (typeof item == "string") {
+		return item == modelValue
+	}else{
+		return item.name == modelValue.name
+	}
+}
+
 </script>
 
 <template>
 	<div ref="root" class="selector">
-		<input type="text" placeholder="Search" v-model="query" />
+		<input v-if="!hideSearch" type="text" placeholder="Search" v-model="query" />
 		<template v-for="item in filtered">
 				<div @click="selectVal(item)">
 					<slot :item="item">
-							<div class="selector-item" :style="{'--color': item.color ? item.color : 'white', '--contrast': item.color ? invert(item.color, true) : 'black'}">
-								{{typeof item == 'string' ? item : item.name}}
-								<Icon :icon="typeof item == 'string' ? item : item.name" />
-							</div>
+						<div class="selector-item" :class="{'selected': isSelected(item)}" :style="{'--color': item.color ? item.color : 'white', '--contrast': item.color ? invert(item.color, true) : 'black'}">
+							{{typeof item == 'string' ? item : item.name}}
+							<Icon :icon="typeof item == 'string' ? item : item.icon || item.name" />
+						</div>
 					</slot>
 				</div>
 		</template>
@@ -73,6 +85,10 @@ function selectVal(item) {
 	font-family: 'Overpass', sans-serif;
 }
 
+.dialog-box-inner .selector-item {
+	font-size: 18px !important;
+}
+
 .selector-item {
 	padding: 5px;
 	font-size: 16px;
@@ -91,6 +107,11 @@ function selectVal(item) {
 	transform: translate(0px, 0px);
 }
 
+.selector-item.selected {
+	background-color: dodgerblue;
+	color: white;
+}
+
 .selector-item > i {
 	font-size: 20px;
 	margin-right: 5px;
@@ -99,6 +120,7 @@ function selectVal(item) {
 .selector-item:hover {
 	box-shadow: 0 3px 6px rgba(0,0,0,.2);
 	transform: translate(0, -2px);
+	background-color: #f5f5f5;
 }
 
 .selector-item:active {

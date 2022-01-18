@@ -11,12 +11,25 @@ const position = ref({
 	left: 0
 })
 
+const snapTo = ref(false)
+
 function openDialog() {
 	open.value = true
 	let rect = root.value.parentElement.getBoundingClientRect()
+	snapTo.value = false
+	
 	position.value = {
 		top: rect.top + rect.height,
 		left: rect.left + rect.width / 2
+	}
+	
+	if (position.value.left + 175 > window.innerWidth) {
+		position.value.left = window.innerWidth - 175 / 2
+	}
+
+	if (rect.top + rect.height + 300 > window.innerHeight) {
+		snapTo.value = true
+		position.value.top = window.innerHeight - rect.top
 	}
 }
 
@@ -59,7 +72,8 @@ function closeDialog() {
 <template>
 	<div ref="root" class="dialog-box" :class="{open: open}">
 		<Teleport to="body" v-if="open">
-			<div :class="{'closing': animateClose}" :style="{'--left': position.left + 'px', '--top': position.top + 'px'}" class="dialog-box-inner">
+			<div class="dialog-shade" :class="{'closing': animateClose}"></div>
+			<div :class="{'closing': animateClose, 'bottom-snap': snapTo}" :style="{'--left': position.left + 'px', '--top': position.top + 'px'}" class="dialog-box-inner">
 				<div class="dialog-box-inner-container"><slot></slot></div>
 			</div>
 		</Teleport>
@@ -67,6 +81,70 @@ function closeDialog() {
 </template>
 
 <style scoped>
+
+@media (max-width: 900px) {
+	.dialog-box-inner {
+		width: 100vw !important;
+		height: 100vh !important;
+		left: 0vw !important;
+		top: 0vh !important;
+		bottom: unset !important;
+		display: flex !important;
+		flex-direction: column !important;
+		align-items: center !important;
+		justify-content: center !important;
+		pointer-events: none !important;
+		transform-origin: center !important;
+	}
+
+	.dialog-box-inner-container {
+		pointer-events: all !important;
+		max-height: 80vh !important;
+	}
+
+	.dialog-box-inner-container {
+		width: 250px;
+	}
+
+	.dialog-box-inner::after, .dialog-box-inner::before {
+		display: none;
+	}
+
+	.dialog-shade {
+		position: fixed;
+		width: 100vw;
+		height: 100vh;
+		background-color: rgba(0, 0, 0, 0.5);
+		z-index: 40;
+		top: 0;
+		left: 0;
+		opacity: 0;
+		animation: fade-in 0.3s ease-in-out forwards;
+		transition: .3s;
+	}
+
+	.closing.dialog-shade {
+		animation: fade-out 0.3s ease-in-out forwards;
+	}
+}
+
+@keyframes fade-in {
+	0% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes fade-out {
+	0% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
+}
 
 .dialog-box {
 	position: relative;
@@ -80,6 +158,12 @@ function closeDialog() {
 	z-index: 50;
 	transform-origin: top center;
 	animation: grow .2s ease-in-out forwards;
+}
+
+.dialog-box-inner.bottom-snap {
+	bottom: calc(var(--top) + 10px);
+	top: unset;
+	transform-origin: bottom center;
 }
 
 .dialog-box-inner.closing {
@@ -141,6 +225,18 @@ function closeDialog() {
 	/* height: calc(var(--box-size) / 2); */
 	border: calc(var(--box-size) / 2) solid transparent;
 	border-bottom: calc(var(--box-size) / 2) solid rgb(255, 255, 255);
+}
+
+.dialog-box-inner.bottom-snap::after {
+	top: unset;
+	bottom: calc(-21px * 1.4142135623730951);
+	border: calc(var(--box-size) / 2) solid transparent;
+	border-top: calc(var(--box-size) / 2) solid rgb(255, 255, 255);
+}
+
+.dialog-box-inner.bottom-snap::before {
+	bottom: -10px;
+	top: unset;
 }
 
 /* ===== Scrollbar CSS ===== */

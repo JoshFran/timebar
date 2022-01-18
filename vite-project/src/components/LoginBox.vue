@@ -1,7 +1,9 @@
 <script setup>
 import { computed, defineComponent, onMounted, ref } from 'vue'
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
 import { auth as authui } from "firebaseui";
-import { GoogleAuthProvider, EmailAuthProvider, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, linkWithPopup, EmailAuthProvider, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 
 const isUILoading = ref(true)
 const isStateLoading = ref(true)
@@ -14,10 +16,11 @@ let emit = defineEmits([
 ])
 
 const isLoggedIn = ref(false)
+const isPerma = ref(false)
 
 onMounted(() => {
 	const auth = window.timebar.auth;
-	var ui = new authui.AuthUI(auth);
+	var ui = new authui.AuthUI(firebase.auth());
 	console.log(auth);
 
 	ui.start('#firebaseui-auth-container', {
@@ -28,7 +31,11 @@ onMounted(() => {
 		],
 		callbacks: {
 			signInFailure(err) {
-				console.log(err);
+				if (err.code == "firebaseui/anonymous-upgrade-merge-conflict") {
+					alert("This account is already linked to another user. Please logout and sign in with that account.")
+					window.location.reload()
+					return;
+				}
 				isUILoading.value = false;
 			},
 			signInSuccessWithAuthResult: function (authResult, redirectUrl) {
@@ -44,7 +51,7 @@ onMounted(() => {
 		},
 
 		signInFlow: 'popup',
-		signInSuccessUrl: 'https://timebar.xyz',
+		signInSuccessUrl: window.location.host.startsWith("localhost") ? 'http://localhost:3000' : 'https://timebar.xyz',
 		tosUrl: '',
 		privacyPolicyUrl: ''
 	});
@@ -65,6 +72,10 @@ onAuthStateChanged(window.timebar.auth, (user) => {
 
 
 function guestLogin() {
+	if (isPerma.value) {
+		isLoggedIn.value = true
+		return
+	}
 	isUILoading.value = true 
 	const auth = window.timebar.auth;
 	signInAnonymously(auth).then(function (result) {
@@ -77,6 +88,15 @@ function guestLogin() {
 
 	});
 }
+
+function linkToPermanentAccount() {
+	isLoggedIn.value = false
+	isPerma.value = true
+}
+
+defineExpose({
+	linkToPermanentAccount
+})
 
 </script>
 
@@ -98,6 +118,7 @@ function guestLogin() {
 					<i class="fas fa-arrow-right"></i>
 				</div>
 			</div>
+			<p style="color: white; font-size: 12px">By continuing, you agree <br> to our <a style="text-decoration: none; font-weight: bold; color: white;" href="/privacy.html" target="_blank">privacy policy</a></p>
 		</div>
 	</div>
 </template>
