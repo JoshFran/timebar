@@ -296,13 +296,43 @@ function getBlockTransform(block) {
 	let xdist = Math.abs(block.x - position.value.x);
 	let ydist = Math.abs(block.y - position.value.y);
 	let realDist = Math.sqrt(Math.pow(block.x - position.value.x, 2) + Math.pow(block.y - position.value.y, 2))
+	let unitX = (block.x - position.value.x) / realDist;
+	let unitY = (block.y - position.value.y) / realDist;
+	if (isNaN(unitX)) {
+		unitX = 0
+	}
+	if (isNaN(unitY)) {
+		unitY = 0
+	}
 	let centerX = container.value.width / 2;
 	let centerY = container.value.height / 2;
 	let scale = Math.min(1, Math.max(.3, lerp(1, .3, realDist / 3)))
 	let xs = Math.sign(block.x - position.value.x)
 	let ys = Math.sign(block.y - position.value.y)
-	let x = centerX - blockSize.value / 2 + (block.x - position.value.x) * blockSize.value
-	let y = centerY - blockSize.value / 2 + (block.y - position.value.y) * blockSize.value
+	let bx = block.x;
+	let by = block.y;
+
+	// if (xdist > 1) {
+	// 	xdist += 1;
+	// }
+	// if (ydist > 1) {
+	// 	ydist += 1;
+	// }
+	// if (xdist > 3) {
+	// 	xdist += 2;
+	// }
+	// if (ydist > 3) {
+	// 	ydist += 2;
+	// }
+	// bx += (xdist * unitX * -1) / 4;
+	// by += (ydist * unitY * -1) / 4;
+	
+	// bx = position.value.x + unitX * xdist * scale * 1.5;
+	// by = position.value.y + unitY * ydist * scale * 1.5;
+
+	// scale = 1;
+	let x = centerX - blockSize.value / 2 + (bx - position.value.x) * blockSize.value
+	let y = centerY - blockSize.value / 2 + (by - position.value.y) * blockSize.value
 
 	let xd = centerX - blockSize.value / 2
 	let yd = centerY - blockSize.value / 2
@@ -312,8 +342,8 @@ function getBlockTransform(block) {
 		//scale = 1
 	}
 
-	//x += xs * (realDist * blockSize.value / 8)
-	//y += ys * (realDist * blockSize.value / 8)
+	// x += xs * (realDist * blockSize.value / 8)
+	// y += ys * (realDist * blockSize.value / 8)
 
 	if (dist >= 1) {
 		//scale = 0.5
@@ -331,6 +361,8 @@ function getBlockTransform(block) {
 	
 	if (gridMode.value) {
 		scale = .9
+	}else{
+		
 	}
 	let shouldtrans = true
 	if (currentHolding.value && currentHolding.value.id == block.id) {
@@ -2132,8 +2164,6 @@ const shouldUpgradeAccount = ref(false)
 		<div class="modal-content">
 			<h1 class="big-title">Save Your Data</h1>
 			<p>
-				Hey! Remember when you chose to sign in later? Well, now's the time.
-				<br>
 				Please sign in via Google, or Email to save your data permanently.
 			</p>
 			<div class="btn-bar">
@@ -2920,20 +2950,24 @@ p {
 	justify-content: center;
 	align-items: center;
 	font-size: 36px;
-	transition: .3s;
+	transition: all .3s, background-color .1s;
 
-	background-color: rgb(72, 167, 88);
+	background-color: white;
+	border: 4px solid dodgerblue;
+	color: dodgerblue;
+	box-sizing: border-box;
 	border-radius: 12px;
 	box-shadow: 0px 3px 6px rgba(0, 0, 0, .2);
 	--scale: 1;
 }
 
 .add-block-direction:hover {
-	--scale: 1.2;
+	--scale: 1;
+	background-color: rgb(189, 217, 244);
 }
 
 .block.active .add-block-direction, .block:hover .add-block-direction, .block.active:hover .add-block-direction {
-	transform: translate(calc(var(--x) * 100% + var(--x) * 80px), calc(var(--y) * 100% + var(--y) * 80px)) scale(var(--scale));
+	transform: translate(calc(var(--x) * 100% + var(--x) * 60px), calc(var(--y) * 100% + var(--y) * 60px)) scale(var(--scale));
 }
 
 .block.editing .add-block-direction {
@@ -3137,11 +3171,13 @@ a {
 }
 
 .editing .block-background {
-	transform: scale(0);
-	/* opacity: 0; */
+	/* transform: scale(1);
+	opacity: 0;
 	border-radius: 50%;
 	box-shadow: 0px 3px 6px rgba(0, 0, 0, .3);
 	cursor: default;
+	transition: .2s; */
+	border-color: white;
 }
 .block.editing {
 	cursor: default;
@@ -3165,9 +3201,11 @@ a {
 	justify-content: center;
 	cursor: pointer;
 	background-color: transparent;
-	transition: .3s;
-	border-radius: 120px;
-	background-color: #42b983;
+	transition: .1s;
+	border-radius: 14px;
+	background-color: white;
+	border: 4px solid dodgerblue;
+	color: dodgerblue;
 	box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.199);
 	pointer-events: none;
 	transform: scale(0);
@@ -3190,7 +3228,7 @@ input.block-text {
 }
 
 .block-edit-btn:hover {
-	background-color: rgb(93, 202, 135);
+	background-color: rgb(189, 217, 244);
 }
 
 .block-wrap {
@@ -3214,10 +3252,13 @@ input.block-text {
 	--add-scale: 0;
 	cursor: pointer;
 	/* overflow: hidden; */
+
+	box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.1);
 }
 
 .block:hover {
-	--add-scale: .1;
+	--add-scale: 0;
+	outline: 4px solid rgba(0, 174, 255, 0.4);
 }
 
 .grid-mode .block, .grid-mode .block .block-background {
@@ -3239,6 +3280,7 @@ input.block-text {
 .grid-mode .block .block-text {
 	font-size: 12px;
 	height: 15px;
+	opacity: 0;
 }
 
 .grid-mode .block .block-icon {
@@ -3292,7 +3334,7 @@ input.block-text {
 
 .block .block-icon, .block .block-text {
 	pointer-events: none;
-	color: var(--contrast);
+	color: var(--color);
 }
 
 .editing .block-icon > i {
@@ -3301,7 +3343,9 @@ input.block-text {
 }
 
 .block-background {
-	background-color: var(--color);
+	border: 6px solid var(--color);
+	box-sizing: border-box;
+	background: white;
 	position: absolute;
 	top: 0px;
 	left: 0px;
@@ -3350,7 +3394,7 @@ input.block-text {
 		height: 100%;
 		transform: translate(0px, 0px);
 		z-index: 10;
-		transition: .3s;
+		transition: .3s cubic-bezier(0, 0.66, 0.13, 0.96);
 		border-radius: 0px;
 	}
 
@@ -3364,8 +3408,9 @@ input.block-text {
 		width: 500px;
 		height: 500px;
 		transform: translate(calc(50vw - 250px), calc(50vh - 250px));
+		
 		z-index: 10;
-		transition: .3s;
+		transition: .3s cubic-bezier(0, 0.66, 0.13, 0.96);
 	}
 
 	.editing .block-background {
