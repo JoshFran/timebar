@@ -206,8 +206,7 @@ const enableTransition = ref(true)
 const blockEls = ref([])
 
 const currentChunk = ref(null)
-
-
+const prevChunk = ref(null)
 
 const count = ref(0)
 
@@ -609,7 +608,7 @@ async function initChunk(first) {
 			[Math.floor(getNow() / 1000) - c]: "aa"
 		}
 	}
-	await setDoc(cref, data)
+	await setDoc(cref, data, {merge: true})
 }
 
 const userMenu = computed(() => {
@@ -685,6 +684,18 @@ function refreshConnection(u) {
 				initChunk()
 			}
 		});
+
+		let crefPrev = getPrevChunkRef()
+
+		/*const unsub3 = onSnapshot(crefPrev, snapshot => {
+			if (snapshot.exists()) {
+				let d = snapshot.data()
+				prevChunk.value = d
+				if (!prevChunk.value.log) {
+					prevChunk.value.log = {}
+				}
+			}
+		});*/
 	}
 }
 
@@ -746,7 +757,7 @@ function updateBlock(block, v) {
 			}
 		}
 		updates = []
-		updateDoc(dRef, updateMap)
+		setDoc(dRef, updateMap, {merge: true})
 	}, 1000)
 }
 
@@ -1039,11 +1050,23 @@ function getProfRef() {
 	return doc(db, "users", user.value.uid)
 }
 
-let linearLog = computed(() => {
-	if (currentChunk.value && currentChunk.value.log)
-		return Object.keys(currentChunk.value.log).map(key => [parseInt(key), currentChunk.value.log[key]]).sort((a, b) => a[0] - b[0])
+function keysIntoLinearLog(c) {
+	return Object.keys(c.log)
+		.map(key => [parseInt(key), c.log[key]])
+		.sort((a, b) => a[0] - b[0])
+}
 
-	return []
+let linearLog = computed(() => {
+	let log = []
+	/*if (prevChunk.value && prevChunk.value.log) {
+		log = keysIntoLinearLog(prevChunk.value)
+	}*/
+
+	if (currentChunk.value && currentChunk.value.log) {
+		log = log.concat(keysIntoLinearLog(currentChunk.value))
+	}
+
+	return log
 })
 
 let latestTracking = computed(() => {
@@ -1130,6 +1153,11 @@ function startTracking(block) {
 
 function getChunkRef() {
 	let m = getCurrentChunk()
+	return doc(db, "users", user.value.uid, "chunks", m)
+}
+
+function getPrevChunkRef() {
+	let m = (parseInt(getCurrentChunk()) - 60 * 60 * 24 * 14).toString()
 	return doc(db, "users", user.value.uid, "chunks", m)
 }
 
@@ -1323,7 +1351,7 @@ function initUser(useTemplate) {
 				}
 			},
 			created: getNow(),
-		})
+		}, { merge: true })
 		await initChunk(true)
 		creatingUser.value = false
 		isInitialized.value = true
@@ -1749,8 +1777,38 @@ const resizingBlockA = ref(null)
 const resizingBlockB = ref(null)
 const resizingEdge = ref(null)
 const resizingEdgeChunkTime = ref(null)
+const resizingEdgeRealTime = ref(null)
 const resizingBlockTarget = ref(0)
 const isResizing = ref(false)
+
+function download(filename, text) {
+	var element = document.createElement('a');
+	element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+	element.setAttribute('download', filename);
+
+	element.style.display = 'none';
+	document.body.appendChild(element);
+
+	element.click();
+
+	document.body.removeChild(element);
+}
+
+window.downloadData = function () {
+	let d = {
+
+	}
+
+	if (prevChunk.value) {
+		d[getPrevChunkRef().id] = prevChunk.value
+	}
+
+	if (currentChunk.value) {
+		d[getChunkRef().id] = currentChunk.value
+	}
+
+	download("data.json", JSON.stringify(d, null, "\t"))
+}
 
 function setResizeTarget(clientY) {
 	let i = getLogItemIndex(resizingEdgeChunkTime.value)
@@ -1801,22 +1859,28 @@ function confirmResize() {
 	let key = resizingEdgeChunkTime.value.toString()
 
 	let activity = currentChunk.value.log[key]
-	deleteKeyInChunk(getTime(selectedTime.value), "log." + key)
+	deleteKeyInChunk(resizingEdgeRealTime.value, "log." + key)
 	//delete currentChunk.value.log[key]
 	let offset = currentWeekdayAndTimeToChunkTime(resizingDay.value, 0)
 	let r = offset + resizingBlockTarget.value
 
 	if (r - resizingEdgeChunkTime.value != 0) {
 		//currentChunk.value.log[r.toString()] = activity
-		setKeyInChunk(getTime(selectedTime.value), "log." + r.toString(), activity)
+		setKeyInChunk(resizingEdgeRealTime.value, "log." + r.toString(), activity)
 	}
 }
 
 function currentWeekdayAndTimeToChunkTime(day, time) {
 	let sow = getTime(startOfWeek(new Date()))
 	let d = sow + day * 24 * 60 * 60 * 1000
-	let chunk = floorToChunk(sow)
+	let chunk = floorToChunk(d)
 	return ((sow / 1000) - chunk) + day * 24 * 60 * 60 + time
+}
+
+function currentWeekdayAndTimeToRealTime(day, time) {
+	let sow = getTime(startOfWeek(new Date()))
+	let d = sow + day * 24 * 60 * 60 * 1000
+	return d
 }
 
 function startResize(e, d, start, end) {
@@ -1844,6 +1908,7 @@ function startResize(e, d, start, end) {
 	}
 
 	resizingEdgeChunkTime.value = currentWeekdayAndTimeToChunkTime(d, resizingEdge.value)
+	resizingEdgeRealTime.value = currentWeekdayAndTimeToRealTime(d, resizingEdge.value)
 
 	resizingDay.value = d
 
@@ -1874,18 +1939,20 @@ function addLogBlock(time, blockId) {
 
 function addTimeBlock(d, start, end, direction) {
 	let chunkTime = currentWeekdayAndTimeToChunkTime(d, start)
+	let realTime = currentWeekdayAndTimeToRealTime(d, start)
 	let i = getLogItemIndex(chunkTime)
 	if (direction) {
-		setKeyInChunk(getTime(selectedTime.value), "log." + Math.floor(chunkTime + (end - start) * 0.9).toString(), linearLog.value[i][1])
+		setKeyInChunk(realTime, "log." + Math.floor(chunkTime + (end - start) * 0.9).toString(), linearLog.value[i][1])
 	}else{
-		setKeyInChunk(getTime(selectedTime.value), "log." + Math.floor(chunkTime + (end - start) * 0.1).toString(), linearLog.value[i][1])
+		setKeyInChunk(realTime, "log." + Math.floor(chunkTime + (end - start) * 0.1).toString(), linearLog.value[i][1])
 	}
 }
 
 function updateTimeBlock(d, start, blockId) {
 	let chunkTime = currentWeekdayAndTimeToChunkTime(d, start)
 	//currentChunk.value.log[chunkTime.toString()] = blockId
-	setKeyInChunk(getTime(selectedTime.value), "log." + chunkTime.toString(), blockId)
+	let realTime = currentWeekdayAndTimeToRealTime(d, start)
+	setKeyInChunk(realTime, "log." + chunkTime.toString(), blockId)
 }
 
 const dataValues = ref([30, 40, 60, 70, 5]);
