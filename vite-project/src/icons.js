@@ -727,6 +727,7 @@ export default {
     "save": "fas fa-save",
     "school": "fas fa-school",
     "screwdriver": "fas fa-screwdriver",
+    "kitchen-set": "fas fa-kitchen-set",
     "scroll": "fas fa-scroll",
     "sd-card": "fas fa-sd-card",
     "search": "fas fa-search",

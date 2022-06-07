@@ -4,6 +4,9 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { auth as authui } from "firebaseui";
 import { getAuth, GoogleAuthProvider, linkWithPopup, EmailAuthProvider, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { Rive } from "@rive-app/canvas";
+
+import loaderRiv from "../assets/loader.riv?url";
 
 const isUILoading = ref(true)
 const isStateLoading = ref(true)
@@ -18,7 +21,27 @@ let emit = defineEmits([
 const isLoggedIn = ref(false)
 const isPerma = ref(false)
 
-onMounted(() => {
+const loaderRef = ref(null)
+let timer = null;
+let cb = null;
+
+onMounted(async () => {
+	const blob = new Blob([loaderRiv], {type: 'text/plain; charset=utf-8'});
+	
+	let buffer = await blob.arrayBuffer();
+	
+	console.log("Loader", buffer);
+	timer = setTimeout(() => {
+		r.stop();
+		if (cb) cb();
+		timer = null;
+	}, 1500);
+	let r = new Rive({
+		src: loaderRiv,
+		canvas: loaderRef.value,
+		autoplay: true,
+	});
+	
 	const auth = window.timebar.auth;
 	var ui = new authui.AuthUI(firebase.auth());
 	console.log(auth);
@@ -58,15 +81,20 @@ onMounted(() => {
 })
 
 onAuthStateChanged(window.timebar.auth, (user) => {
-	isStateLoading.value = false
-	if (user) {
-		const uid = user.uid
+	cb = () => {
+		isStateLoading.value = false
+		if (user) {
+			const uid = user.uid
 
-		emit("setUser", user)
-		isLoggedIn.value = true
-	} else {
-		emit("setUser", null)
-		isLoggedIn.value = false
+			emit("setUser", user)
+			isLoggedIn.value = true
+		} else {
+			emit("setUser", null)
+			isLoggedIn.value = false
+		}
+	};
+	if (!timer) {
+		cb();
 	}
 });
 
@@ -102,13 +130,14 @@ defineExpose({
 
 <template>
 	<div id="auth-modal" :class="{'hide-modal': isLoggedIn}">
-		<img
+		<!-- <img
 			class="login-logo"
 			:class="{ 'logo-loading': isLoading }"
 			alt="Timebar Logo"
 			src="../assets/logo.svg"
 			style="max-width: 200px;"
-		/>
+		/> -->
+		<canvas width="300" height="300" ref="loaderRef"></canvas>
 		<div>
 			<div class="login-box" :class="{ 'shrink-login': isLoading || isLoggedIn }" id="firebaseui-auth-container">
 			</div>

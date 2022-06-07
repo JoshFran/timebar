@@ -31,7 +31,7 @@ const alias = ref({
 	"study": "graduation-cap",
 	"shopping": "shopping-cart",
 	"shop": "shopping-cart",
-	"cooking": "utensils",
+	"cooking": "kitchen-set",
 	"cook": "utensils",
 	"cleaning": "broom",
 	"clean": "broom",

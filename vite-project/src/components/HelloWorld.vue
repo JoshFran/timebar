@@ -1,7 +1,7 @@
 <script setup>
 import { format, getDay, getTime, getWeek, startOfWeek, endOfWeek, subWeeks, addWeeks, endOfDay, startOfDay, subDays, addDays, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears } from 'date-fns'
 
-import { getFirestore, collection, onSnapshot, doc, getDoc, setDoc, updateDoc, arrayRemove, arrayUnion, deleteField } from "firebase/firestore";
+import { getFirestore, collection, getDocs, onSnapshot, orderBy, limit, doc, getDoc, setDoc, updateDoc, arrayRemove, arrayUnion, deleteField, query, where } from "firebase/firestore";
 import { logEvent } from "firebase/analytics";
 
 import { DoughnutChart, useDoughnutChart, BarChart } from "vue-chart-3"
@@ -206,6 +206,7 @@ const enableTransition = ref(true)
 const blockEls = ref([])
 
 const currentChunk = ref(null)
+const currentChunkId = ref(null)
 const prevChunk = ref(null)
 
 const count = ref(0)
@@ -639,6 +640,19 @@ async function initChunk(first) {
 		data.log = {
 			[Math.floor(getNow() / 1000) - c]: "aa"
 		}
+	}else{
+		// let latestTimerQuery = query(collection(db, "users", user.value.uid, "chunks"), orderBy("updated", "desc"), limit(1));
+		// let docs = await getDocs(latestTimerQuery);
+
+		// if (docs.length > 0) {
+		// 	let latestTimer = docs[0].data
+		// 	let log = latestTimer.log
+		// 	let lastTime = Object.keys(log).sort()[0]
+		// 	let lastValue = log[lastTime]
+		// 	data.log = {
+		// 		[Math.floor(getNow() / 1000) - c]: lastValue
+		// 	}
+		// }
 	}
 	await setDoc(cref, data, {merge: true})
 }
@@ -650,6 +664,8 @@ const userMenu = computed(() => {
 		]
 	}else{
 		let x = [
+
+			{name: "Get My Data", icon: "download"},
 			{name: "Logout", icon: "sign-out-alt"}
 		]
 
@@ -678,22 +694,26 @@ function refreshConnection(u) {
 			
 			if (d) {
 				isInitialized.value = true
-				console.log("Loaded blocks ", blocks.value)
+				console.log("Got new profile snapshot: ", d);
 				blocks.value = Object.keys(d.blocks).map(id => d.blocks[id])
 				profileData.value = d
 			}
 		});
 
 		let cref = getChunkRef()
+		let latestQuery = query(collection(db, "users", user.value.uid, "chunks"), orderBy("created", "desc"), limit(1))
 
 		let justStarted = true
 
-		const unsub2 = onSnapshot(cref, snapshot => {
+		const unsub2 = onSnapshot(latestQuery, snapshots => {
+			let snapshot = snapshots.docs[0]
 			isProfileWatched.value = true
 			
 			if (snapshot.exists()) {
 				let d = snapshot.data()
 				currentChunk.value = d
+				currentChunkId.value = snapshot.id;
+
 				if (!currentChunk.value.log) {
 					currentChunk.value.log = {}
 				}
@@ -708,6 +728,9 @@ function refreshConnection(u) {
 							snappedPosition.value.y = b.y
 							position.value.x = b.x
 							position.value.y = b.y
+							setTimeout(() => {
+								ignoreSnap = false
+							}, 10)
 						}
 					}
 				}
@@ -716,6 +739,25 @@ function refreshConnection(u) {
 				initChunk()
 			}
 		});
+
+		let latestTimerQuery = query(collection(db, "users", user.value.uid, "chunks"), orderBy("updated", "desc"), limit(1))
+
+		// const unsub3 = onSnapshot(latestTimerQuery, snapshots => {
+		// 	if (snapshots.docs.length == 0) {
+		// 		console.log("User doesn't yet have any chunks that were updated");
+				
+		// 		return;
+		// 	}
+
+		// 	let snapshot = snapshots.docs[0]
+			
+		// 	if (snapshot.exists()) {
+		// 		let d = snapshot.data()
+		// 		console.log(d);
+		// 	}else{
+				
+		// 	}
+		// });
 
 		let crefPrev = getPrevChunkRef()
 
@@ -788,8 +830,9 @@ function updateBlock(block, v) {
 				updateMap[["blocks." + update.block.id + "." + k]] = update.value[k]
 			}
 		}
-		updates = []
-		setDoc(dRef, updateMap, {merge: true})
+		updates = [];
+		console.log(updateMap);
+		updateDoc(dRef, updateMap)
 	}, 1000)
 }
 
@@ -831,6 +874,14 @@ setInterval(() => {
 const calendarScale = ref(1)
 
 const dayNames = ref(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"])
+
+window.getChunks = async () => {
+	let chunksList = {};
+	(await getDocs(query(collection(db, "users", user.value.uid, "chunks")))).forEach((doc) => {
+		chunksList[doc.id] = doc.data();
+	});
+	return chunksList;
+};
 
 window.addEventListener("mousewheel", (e) => {
 	if (currentTab.value == "tracking") {
@@ -1120,7 +1171,7 @@ function getLogItemIndex(time) {
 
 function getCurrentChunk() {
 	let n = getNow()
-	return (Math.floor(n / (1000 * 60 * 60 * 24 * 14)) * (60 * 60 * 24 * 14)).toString()
+	return (Math.floor(n / (1000 * chunkIntervalSeconds)) * (chunkIntervalSeconds)).toString()
 }
 
 function getCurrentTime() {
@@ -1150,6 +1201,7 @@ const currentTracking = computed(() => {
 let trackingTimeout = null
 
 function startTracking(block) {
+	console.log("started tracking", block);
 	trackEvent("start_tracking", {
 		name: block.name
 	})
@@ -1176,10 +1228,23 @@ function startTracking(block) {
 	if (trackingTimeout)
 		clearTimeout(trackingTimeout)
 	
-	trackingTimeout = setTimeout(() => {
-		updateDoc(cref, {
-			[["log." + t.toString()]]: block.id
-		})
+	trackingTimeout = setTimeout(async () => {
+		try {
+			await updateDoc(cref, {
+				"updated": getNow(),
+				[["log." + t.toString()]]: block.id
+			})
+			console.log("Updated existing chunk");
+		}catch(e) {
+			console.error(e);
+			console.log("Creating new chunk");
+			await initChunk();
+
+			await updateDoc(cref, {
+				"updated": getNow(),
+				[["log." + t.toString()]]: block.id
+			})
+		}
 	}, 1000)
 }
 
@@ -1189,180 +1254,163 @@ function getChunkRef() {
 }
 
 function getPrevChunkRef() {
-	let m = (parseInt(getCurrentChunk()) - 60 * 60 * 24 * 14).toString()
+	let m = (parseInt(getCurrentChunk()) - chunkIntervalSeconds).toString()
 	return doc(db, "users", user.value.uid, "chunks", m)
 }
 
 let templates = {
 	"58": {
+		"x": -2,
 		"id": "58",
-		"y": 1,
-		"x": -3,
-		"name": "reddit",
-		"color": "#2196f3"
-	},
-	"hd": {
-		"name": "youtube",
 		"color": "#2196f3",
-		"y": 0,
-		"id": "hd",
-		"x": -3
-	},
-	"fr": {
-		"id": "fr",
-		"color": "#673ab7",
-		"x": 3,
-		"name": "eating",
-		"y": 0
-	},
-	"pd": {
-		"x": -1,
-		"y": 3,
-		"name": "groceries",
-		"id": "pd",
-		"color": "#f44336"
-	},
-	"zk": {
-		"color": "#8bc34a",
-		"y": -4,
-		"x": 0,
-		"name": "email",
-		"id": "zk"
-	},
-	"mo": {
-		"y": 2,
-		"id": "mo",
-		"name": "dishes",
-		"color": "#f44336",
-		"x": 0
-	},
-	"0p": {
-		"y": -3,
-		"name": "meeting",
-		"id": "0p",
-		"x": 1,
-		"color": "#8bc34a"
+		"y": 1,
+		"icon": "youtube",
+		"name": "youtube"
 	},
 	"bq": {
-		"id": "bq",
-		"name": "Home Improvement",
-		"x": 0,
+		"y": 3,
 		"color": "#f44336",
-		"y": 4,
-		"icon": "hammer"
-	},
-	"8r": {
-		"x": 0,
-		"name": "working",
-		"id": "8r",
-		"icon": "briefcase",
-		"y": -3,
-		"color": "#8bc34a"
-	},
-	"oc": {
-		"name": "admin",
-		"color": "#8bc34a",
-		"y": -3,
-		"id": "oc",
-		"x": -1
-	},
-	"bp": {
-		"id": "bp",
-		"y": 0,
-		"x": -4,
-		"color": "#2196f3",
-		"name": "twitter"
-	},
-	"zc": {
-		"x": -5,
-		"y": -1,
-		"id": "zc",
-		"color": "#2196f3",
-		"name": "gaming"
-	},
-	"8m": {
-		"color": "#2196f3",
-		"name": "facebook",
-		"y": -1,
-		"x": -3,
-		"id": "8m"
-	},
-	"bi": {
-		"y": 1,
-		"id": "bi",
-		"color": "#673ab7",
-		"x": 3,
-		"name": "brushing"
-	},
-	"dz": {
-		"color": "#673ab7",
-		"x": 3,
-		"id": "dz",
-		"name": "shower",
-		"y": -1
-	},
-	"lh": {
-		"name": "bathroom",
-		"id": "lh",
-		"x": 2,
-		"y": 0,
-		"color": "#673ab7"
-	},
-	"gk": {
-		"name": "tiktok",
-		"id": "gk",
-		"y": 0,
-		"color": "#2196f3",
-		"x": -2
-	},
-	"so": {
-		"y": -2,
-		"x": 0,
-		"color": "#8bc34a",
-		"id": "so",
-		"name": "learning"
-	},
-	"aa": {
-		"y": 0,
-		"name": "sleeping",
-		"id": "aa",
-		"color": "#7a7a7a",
+		"id": "bq",
+		"name": "diy",
+		"icon": "hammer",
 		"x": 0
 	},
-	"rk": {
-		"id": "rk",
-		"name": "cooking",
-		"x": 4,
+	"dz": {
+		"id": "dz",
+		"y": -1,
 		"color": "#673ab7",
-		"y": 0
+		"name": "shower",
+		"x": 2
 	},
-	"zq": {
-		"name": "tv",
-		"y": 2,
-		"color": "#2196f3",
-		"id": "zq",
-		"x": -4
+	"zk": {
+		"name": "email",
+		"x": 0,
+		"color": "#8bc34a",
+		"id": "zk",
+		"y": -3
 	},
-	"ab": {
-		"y": 1,
-		"name": "internet",
-		"color": "#2196f3",
-		"x": -5,
-		"id": "ab"
+	"oc": {
+		"x": -1,
+		"id": "oc",
+		"color": "#8bc34a",
+		"name": "admin",
+		"y": -2
 	},
 	"8q": {
+		"y": 2,
 		"x": 0,
-		"name": "cleaning",
 		"color": "#f44336",
 		"id": "8q",
-		"y": 3
+		"name": "cleaning"
+	},
+	"mo": {
+		"color": "#673ab7",
+		"name": "dishes",
+		"y": 0,
+		"x": 2,
+		"id": "mo"
+	},
+	"rk": {
+		"y": 0,
+		"x": 3,
+		"icon": "kitchen-set",
+		"color": "#673ab7",
+		"name": "cooking",
+		"id": "rk"
+	},
+	"so": {
+		"id": "so",
+		"color": "#8bc34a",
+		"x": 0,
+		"name": "learning",
+		"y": -2
+	},
+	"ab": {
+		"name": "internet",
+		"id": "ab",
+		"color": "#2196f3",
+		"y": 0,
+		"x": -2
+	},
+	"fr": {
+		"x": 1,
+		"y": 0,
+		"id": "fr",
+		"name": "eating",
+		"color": "#673ab7"
+	},
+	"lh": {
+		"id": "lh",
+		"color": "#f44336",
+		"name": "driving",
+		"x": 0,
+		"y": 1,
+		"icon": "car"
+	},
+	"zq": {
+		"x": -1,
+		"id": "zq",
+		"y": 0,
+		"name": "tv",
+		"color": "#2196f3"
+	},
+	"pd": {
+		"id": "pd",
+		"x": -1,
+		"y": 2,
+		"name": "groceries",
+		"color": "#f44336"
+	},
+	"0p": {
+		"id": "0p",
+		"y": -2,
+		"color": "#8bc34a",
+		"name": "meeting",
+		"x": 1
+	},
+	"8r": {
+		"y": -1,
+		"id": "8r",
+		"name": "working",
+		"color": "#8bc34a",
+		"icon": "briefcase",
+		"x": 0
 	},
 	"gn": {
-		"x": 1,
-		"name": "shopping",
-		"id": "gn",
 		"color": "#f44336",
-		"y": 3
+		"name": "shopping",
+		"x": 1,
+		"y": 2,
+		"id": "gn"
+	},
+	"aa": {
+		"id": "aa",
+		"name": "sleeping",
+		"color": "#7a7a7a",
+		"y": 0,
+		"x": 0
+	},
+	"zc": {
+		"y": 0,
+		"name": "gaming",
+		"id": "zc",
+		"color": "#2196f3",
+		"x": -3
+	},
+	"bi": {
+		"color": "#673ab7",
+		"x": 2,
+		"id": "bi",
+		"name": "brushing",
+		"y": 1
+	},
+	"hd": {
+		"icon": "thumbs-up",
+		"y": -1,
+		"color": "#2196f3",
+		"name": "social media",
+		"x": -2,
+		"id": "hd"
 	}
 }
 
@@ -1450,6 +1498,10 @@ const currentTimeUpdating = ref(currentRealTime())
 
 setInterval(() => {
 	currentTimeUpdating.value = currentRealTime()
+	let currentChunkNow = getCurrentChunk();
+	if (currentChunkNow != currentChunkId.value) {
+		initChunk();
+	}
 }, 1000)
 
 document.addEventListener("mouseup", () => {
@@ -1478,9 +1530,11 @@ centerCalendar()
 
 const chunkCache = ref({})
 
+const chunkIntervalSeconds = 60 * 60 * 24 * 14;
+
 function floorToChunk(t) {
 	let n = t
-	let cid = (Math.floor(n / (1000 * 60 * 60 * 24 * 14)) * (60 * 60 * 24 * 14))
+	let cid = (Math.floor(n / (1000 * chunkIntervalSeconds)) * (chunkIntervalSeconds))
 	return cid
 }
 
@@ -1579,8 +1633,8 @@ async function getLatestTimeLog(time) {
 		}
 	}
 
-	let cBack = await getChunkForTime(time - (1000 * 60 * 60 * 24 * 14))
-	ctime = floorToChunk(time - (1000 * 60 * 60 * 24 * 14))
+	let cBack = await getChunkForTime(time - (1000 * chunkIntervalSeconds))
+	ctime = floorToChunk(time - (1000 * chunkIntervalSeconds))
 	rtime = time / 1000 - ctime
 	if (cBack) {
 		let log = Object.keys(cBack.log).map(v => [parseInt(v), cBack.log[v]])
@@ -1840,6 +1894,12 @@ window.downloadData = function () {
 	}
 
 	download("data.json", JSON.stringify(d, null, "\t"))
+}
+
+window.downloadProfile = function () {
+	let d = profileData.value;
+
+	download("profile.json", JSON.stringify(d, null, "\t"))
 }
 
 function setResizeTarget(clientY) {
@@ -2150,10 +2210,74 @@ function userAction(d) {
 		}, 450)
 	} else if (d.name == "Save") {
 		upgradeAccount()
+	} else if (d.name == "Get My Data") {
+		getMyDataChoice.value = true;
 	}
 }
 
+function getMyData(format) {
+	(async () => {
+		let chunksList = {};
+		(await getDocs(query(collection(db, "users", user.value.uid, "chunks")))).forEach((doc) => {
+			chunksList[doc.id] = doc.data();
+		});
+
+		let p = profileData.value;
+
+		if (format == "json") {
+			download("timebar-data.json", JSON.stringify({profile: p, chunks: chunksList}, null, "\t"))
+		} else if (format == "csv") {
+			let rows = ["start,end,activity,color,duration pretty,duration seconds"]
+			let timeLog = []
+			let lastTime = 0;
+
+			for (let key of Object.keys(chunksList).map((k) => parseInt(k)).sort((a, b) => a - b)) {
+				let chunkTimeReal = key * 1000
+				if (chunksList[key].log)
+				for (let block of Object.keys(chunksList[key].log).map((k) => parseInt(k)).sort((a, b) => a - b)) {
+					let time = chunkTimeReal + block * 1000
+					let activity = chunksList[key.toString()].log[block.toString()]
+					let b = blocks.value.find(b => b.id == activity)
+					if (b) {
+						let color = b.color
+						let name = b.name
+						// let duration = time - chunkTime
+						// rows.push(`${chunkTime},${time},${name},${color},${duration}`);
+						timeLog.push({
+							start: time,
+							activity: activity,
+							color: color,
+							name: name
+						})
+					}
+				}
+			}
+
+			timeLog.push({
+				start: getNow()
+			});
+
+			if (timeLog.length > 0)
+			for (let i = 1; i < timeLog.length - 1; i++) {
+				let start = new Date(timeLog[i - 1].start);
+				let end = new Date(timeLog[i].start);
+				let activity = timeLog[i - 1].activity;
+				let color = timeLog[i - 1].color;
+				let name = timeLog[i - 1].name;
+				let duration = formatSeconds((end - start) / 1000).replace("s", "");
+				rows.push(`${start.toISOString()},${end.toISOString()},${name},${color},${duration},${(end - start) / 1000}`);
+			}
+
+			download("timebar-data.csv", rows.join("\n"));
+		}
+	})();
+
+	getMyDataChoice.value = false;
+}
+
 const shouldUpgradeAccount = ref(false)
+
+const getMyDataChoice = ref(false)
 
 </script>
 
@@ -2169,6 +2293,22 @@ const shouldUpgradeAccount = ref(false)
 			<div class="btn-bar">
 				<div class="btn" @click="shouldUpgradeAccount = false" style="--color: #e91e63">Sign-in later<i class="fas fa-arrow-right"></i></div>
 				<div class="btn" @click="upgradeAccount()">Sign-in now<i class="fas fa-cloud-upload-alt"></i></div>
+			</div>
+		</div>
+	</div>
+
+	<div class="get-data-modal modal" :class="{'open': getMyDataChoice}">
+		<div class="modal-content">
+			<h1 class="big-title">How would you like your data?</h1>
+			<div class="btn-bar">
+				<div class="big-btn" @click="getMyData('json')">
+					<i class="fas fa-code fa-3x"></i>
+					<div>JSON</div>
+				</div>
+				<div class="big-btn" @click="getMyData('csv')">
+					<i class="fas fa-file-csv fa-3x"></i>
+					<div>CSV</div>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -2367,6 +2507,7 @@ const shouldUpgradeAccount = ref(false)
 			<Dialog>
 				<Selector :hide-search="true" @update:modelValue="userAction($event)" :data="userMenu"></Selector>
 			</Dialog>
+			
 			<div class="tab-icon">
 				<i v-if="!user || !user.photoURL" class="fas fa-user"></i>
 				<img :src="user.photoURL" v-else />
@@ -2888,6 +3029,10 @@ p {
 	.tab.active {
 		box-shadow: none;
 	}
+
+	.tab {
+		padding: 22px 20px;
+	}
 }
 
 .tab-text {
@@ -3107,6 +3252,13 @@ div.big-btn.disabled {
 		border-bottom-right-radius: 0;
 		bottom:0%;
 		height: unset;
+
+		justify-content: flex-start;
+		overflow: auto;
+	}
+
+	.modal-content h1 {
+		margin: 20px 20px;
 	}
 }
 
