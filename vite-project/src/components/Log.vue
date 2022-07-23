@@ -13,6 +13,8 @@ import "../roundRect.js";
 // 	charMap["fas fa-" + icon.name] = icon.unicode;
 // }
 
+import interact from "interactjs";
+
 import charMap from "../unicode.js";
 
 import { filterIcon } from "../iconer.js";
@@ -32,7 +34,7 @@ import {
 	arrayUnion,
 	deleteField,
 	query,
-	where
+	where,
 } from "firebase/firestore";
 
 import {
@@ -54,14 +56,13 @@ import {
 	subDays,
 	startOfDay,
 	endOfDay,
-	isSameMonth
+	isSameMonth,
 } from "date-fns";
-import { l } from "../../../public/assets/vendor.8aa1c3f6.js";
 
 const props = defineProps({
 	user: Object,
 	db: Object,
-	blocks: Array
+	blocks: Array,
 });
 
 let db = props.db;
@@ -79,7 +80,7 @@ let mutation = {
 	fromChunk: null,
 	fromKey: null,
 	toChunk: null,
-	toKey: null
+	toKey: null,
 };
 
 const chunkIntervalSeconds = 60 * 60 * 24 * 14;
@@ -104,10 +105,10 @@ function getOrEnqueueChunkData(chunkId) {
 
 	chunks[chunkId] = {
 		unsubscribe: null,
-		data: null
+		data: null,
 	};
 
-	const unsubscribe = onSnapshot(getChunkRef(chunkId), snapshot => {
+	const unsubscribe = onSnapshot(getChunkRef(chunkId), (snapshot) => {
 		let d = snapshot.data();
 
 		if (d) {
@@ -187,7 +188,7 @@ function writeLogEntry(date, block) {
 	let relativeS = Math.floor(relativeMs / 1000);
 
 	return updateDoc(cRef, {
-		[["log." + relativeS.toString()]]: block
+		[["log." + relativeS.toString()]]: block,
 	});
 }
 
@@ -265,7 +266,7 @@ function getLogForDay(date) {
 
 		if (mutation.toChunk == chunkKey) {
 			readLog = {
-				...chunk.log
+				...chunk.log,
 			};
 			let currentBlock = getBlockAtExact(
 				mutation.fromChunk,
@@ -289,7 +290,7 @@ function getLogForDay(date) {
 					currentBlock,
 					start / totalMs,
 					ms / totalMs,
-					chunkMs + parseInt(k) * 1000
+					chunkMs + parseInt(k) * 1000,
 				]);
 				start = ms;
 				currentBlock = readLog[k];
@@ -335,7 +336,7 @@ function getLogForDay(date) {
 							currentBlock,
 							start / totalMs,
 							ms / totalMs,
-							chunkAfterMs + parseInt(k) * 1000
+							chunkAfterMs + parseInt(k) * 1000,
 						]);
 						start = ms;
 						currentBlock = chunkAfter.log[k];
@@ -348,7 +349,7 @@ function getLogForDay(date) {
 			log.push([
 				currentBlock,
 				start / totalMs,
-				(now - dayStart) / totalMs
+				(now - dayStart) / totalMs,
 			]);
 		}
 
@@ -361,7 +362,7 @@ function getLogForDay(date) {
 const cnvs = ref(null);
 let cnvsSize = {
 	x: 0,
-	y: 0
+	y: 0,
 };
 
 const focusDay = ref(new Date());
@@ -388,7 +389,7 @@ class DaySlot {
 			height: 0,
 			scale: 0,
 			time: 0,
-			rendered: false
+			rendered: false,
 		};
 	}
 }
@@ -418,7 +419,7 @@ class WeekLayout extends ViewLayout {
 
 		let days = eachDayOfInterval({
 			start: startOfWeek(this.week),
-			end: endOfWeek(this.week)
+			end: endOfWeek(this.week),
 		});
 
 		for (let d of days) {
@@ -439,7 +440,7 @@ class WeekLayout extends ViewLayout {
 			y: row * rowHeight,
 			width: rowWidth,
 			height: rowHeight,
-			radii: 10
+			radii: 10,
 		};
 	}
 }
@@ -456,7 +457,7 @@ class MonthLayout extends ViewLayout {
 
 		let days = eachDayOfInterval({
 			start: startOfWeek(startOfMonth(this.month)),
-			end: endOfWeek(endOfMonth(this.month))
+			end: endOfWeek(endOfMonth(this.month)),
 		});
 
 		for (let d of days) {
@@ -481,7 +482,7 @@ class MonthLayout extends ViewLayout {
 			y: row * (rowHeight + margin),
 			width: rowWidth,
 			height: rowHeight,
-			radii: 10
+			radii: 10,
 		};
 	}
 }
@@ -500,7 +501,7 @@ class YearLayout extends ViewLayout {
 			let month = addMonths(startOfYear(this.year), i);
 			let days = eachDayOfInterval({
 				start: startOfMonth(month),
-				end: endOfMonth(month)
+				end: endOfMonth(month),
 			});
 			for (let d of days) {
 				this.slots.push(new DaySlot(d));
@@ -520,7 +521,7 @@ class YearLayout extends ViewLayout {
 			y: row * 40 * 6 + row * 40 + weekOfMonth * 40,
 			width: 30,
 			height: 30,
-			radii: 30
+			radii: 30,
 		};
 	}
 }
@@ -547,7 +548,7 @@ function getViewLayouts(day, zoom, slide) {
 				}),
 				to: cacheLayout("y-" + day2.getFullYear(), () => {
 					return new YearLayout(day2);
-				})
+				}),
 			};
 		} else if (zoom == -1) {
 			let day2 = addMonths(day, slide);
@@ -563,7 +564,7 @@ function getViewLayouts(day, zoom, slide) {
 					() => {
 						return new MonthLayout(day2);
 					}
-				)
+				),
 			};
 		} else if (zoom >= 0) {
 			let day2 = addWeeks(day, slide);
@@ -579,7 +580,7 @@ function getViewLayouts(day, zoom, slide) {
 					() => {
 						return new WeekLayout(day2);
 					}
-				)
+				),
 			};
 		}
 
@@ -596,7 +597,7 @@ function getViewLayouts(day, zoom, slide) {
 				() => {
 					return new MonthLayout(day);
 				}
-			)
+			),
 		};
 	} else if (zoom == -1) {
 		return {
@@ -611,7 +612,7 @@ function getViewLayouts(day, zoom, slide) {
 				() => {
 					return new WeekLayout(day);
 				}
-			)
+			),
 		};
 	} else if (zoom >= 0) {
 		return {
@@ -626,7 +627,7 @@ function getViewLayouts(day, zoom, slide) {
 				() => {
 					return new WeekLayout(day);
 				}
-			)
+			),
 		};
 	}
 }
@@ -822,7 +823,7 @@ function paint(mouseCheck) {
 			x: Infinity,
 			y: Infinity,
 			width: 0,
-			height: 0
+			height: 0,
 		};
 
 		for (let day of Object.keys(days)) {
@@ -850,17 +851,17 @@ function paint(mouseCheck) {
 	let fromBounds = calcBounds(renderDaysFrom);
 	let toBounds = calcBounds(renderDaysTo);
 
-	let fromBoundsOverlap = calcBounds(renderDaysFrom, day => {
+	let fromBoundsOverlap = calcBounds(renderDaysFrom, (day) => {
 		return dateToKey(day.date) in renderDaysTo;
 	});
 
 	let fromCenterOffset = {
 		x: (cnvsSize.x - fromBounds.width) / 2,
-		y: (cnvsSize.y - fromBounds.height) / 2
+		y: (cnvsSize.y - fromBounds.height) / 2,
 	};
 	let toCenterOffset = {
 		x: (cnvsSize.x - toBounds.width) / 2,
-		y: (cnvsSize.y - toBounds.height) / 2
+		y: (cnvsSize.y - toBounds.height) / 2,
 	};
 
 	let fromTransformer = {
@@ -875,25 +876,25 @@ function paint(mouseCheck) {
 		translateY:
 			fromBounds.y +
 			fromBounds.height / 2 -
-			(fromBoundsOverlap.y + fromBoundsOverlap.height / 2)
+			(fromBoundsOverlap.y + fromBoundsOverlap.height / 2),
 	};
 
 	let inactive = {
 		r: 246,
 		g: 246,
-		b: 246
+		b: 246,
 	};
 	let active = {
 		r: 230,
 		g: 230,
-		b: 230
+		b: 230,
 	};
 
 	let snapMousePos = -1;
 
 	for (let day of [
 		...Object.keys(renderDaysFrom),
-		...Object.keys(renderDaysTo)
+		...Object.keys(renderDaysTo),
 	]) {
 		let slot = renderDays[day];
 		let slotFrom = renderDaysFrom[day];
@@ -904,7 +905,7 @@ function paint(mouseCheck) {
 			y: 0,
 			width: 0,
 			height: 0,
-			color: { r: 0, g: 0, b: 0 }
+			color: { r: 0, g: 0, b: 0 },
 		};
 		let opacity = 1;
 		if (zoomSmooth >= 0 && Math.abs(slideSmooth) < 0.01 && slotFrom) {
@@ -912,7 +913,7 @@ function paint(mouseCheck) {
 			box.color = {
 				r: fromColor.r,
 				g: fromColor.g,
-				b: fromColor.b
+				b: fromColor.b,
 			};
 
 			box.x = fromCenterOffset.x + slotFrom.render.x;
@@ -927,7 +928,7 @@ function paint(mouseCheck) {
 			box.color = {
 				r: lerp(fromColor.r, toColor.r, lerpValue),
 				g: lerp(fromColor.g, toColor.g, lerpValue),
-				b: lerp(fromColor.b, toColor.b, lerpValue)
+				b: lerp(fromColor.b, toColor.b, lerpValue),
 			};
 
 			box.x = lerp(
@@ -965,7 +966,7 @@ function paint(mouseCheck) {
 					y: fromCenterOffset.y + slotFrom.render.y,
 					width: slotFrom.render.width,
 					height: slotFrom.render.height,
-					radii: slotFrom.render.radii
+					radii: slotFrom.render.radii,
 				};
 			} else {
 				opacity = Math.max(0, 1 - lerpValue * 2);
@@ -974,7 +975,7 @@ function paint(mouseCheck) {
 					y: fromCenterOffset.y + slotFrom.render.y,
 					width: slotFrom.render.width,
 					height: slotFrom.render.height,
-					radii: slotFrom.render.radii
+					radii: slotFrom.render.radii,
 				};
 
 				let sx = lerp(1, (1 / fromTransformer.scaleX) * 1.5, lerpValue);
@@ -988,7 +989,7 @@ function paint(mouseCheck) {
 			box.color = {
 				r: fromColor.r,
 				g: fromColor.g,
-				b: fromColor.b
+				b: fromColor.b,
 			};
 			// box.x -= ox;
 			// box.y -= oy;
@@ -1033,7 +1034,7 @@ function paint(mouseCheck) {
 					y: toCenterOffset.y + slotTo.render.y,
 					width: slotTo.render.width,
 					height: slotTo.render.height,
-					radii: slotTo.render.radii
+					radii: slotTo.render.radii,
 				};
 			} else {
 				opacity = lerpValue;
@@ -1042,7 +1043,7 @@ function paint(mouseCheck) {
 					y: toCenterOffset.y + slotTo.render.y,
 					width: slotTo.render.width,
 					height: slotTo.render.height,
-					radii: slotTo.render.radii
+					radii: slotTo.render.radii,
 				};
 			}
 
@@ -1050,7 +1051,7 @@ function paint(mouseCheck) {
 			box.color = {
 				r: toColor.r,
 				g: toColor.g,
-				b: toColor.b
+				b: toColor.b,
 			};
 		}
 
@@ -1218,7 +1219,7 @@ function paint(mouseCheck) {
 													width: box.width,
 													height:
 														(item[2] - item[1]) *
-														box.height
+														box.height,
 												};
 											}
 										} else {
@@ -1297,7 +1298,7 @@ function paint(mouseCheck) {
 									x: box.x,
 									y: box.y + item[1] * box.height,
 									width: box.width,
-									height: (item[2] - item[1]) * box.height
+									height: (item[2] - item[1]) * box.height,
 								};
 							}
 
@@ -1428,7 +1429,7 @@ function paint(mouseCheck) {
 			resize: resizeTarget,
 			slice: sliceTarget,
 			resizeTime,
-			ms
+			ms,
 		};
 	}
 }
@@ -1588,10 +1589,44 @@ onMounted(() => {
 		resize: false,
 		resizeTime: 0,
 		slice: false,
-		targetMs: 0
+		targetMs: 0,
 	};
 
-	cnvs.value.addEventListener("mousedown", async e => {
+	cnvs.value.addEventListener("touchstart", async (e) => {
+		mouseDown = true;
+		mouseDownX = e.touches[0].clientX;
+		mouseDownY = e.touches[0].clientY;
+		calendarYDown = calendarY.value;
+	});
+
+	cnvs.value.addEventListener("touchend", async (e) => {
+		mouseDown = false;
+	});
+
+	cnvs.value.addEventListener("touchmove", async (e) => {
+		focusY = e.touches[0].clientY;
+		let dx = e.touches[0].clientX - mouseDownX;
+		let dy = e.touches[0].clientY - mouseDownY;
+		currentMouseX = e.touches[0].clientX;
+		currentMouseY = e.touches[0].clientY;
+
+		if (mouseDown && calendarScale.value > 1) {
+			calendarY.value = calendarYDown + dy;
+			// calendarYSmooth = calendarY.value;
+			return;
+		}
+
+		if (Math.abs(Math.floor(zoomLevel.value) - zoomLevel.value) > 0.01) {
+			return;
+		}
+
+		if (mouseDown) {
+			moveSlide.value =
+				-1 * Math.min(0.998, Math.max(-0.998, dx / (cnvsSize.x / 2)));
+		}
+	});
+
+	cnvs.value.addEventListener("mousedown", async (e) => {
 		mouseDown = true;
 		mouseDownX = e.clientX;
 		mouseDownY = e.clientY;
@@ -1610,7 +1645,7 @@ onMounted(() => {
 		}
 	});
 
-	document.addEventListener("mouseup", e => {
+	document.addEventListener("mouseup", (e) => {
 		mouseDown = false;
 		snapSlide();
 	});
@@ -1620,7 +1655,7 @@ onMounted(() => {
 		snapSlide();
 	});
 
-	cnvs.value.addEventListener("mousemove", e => {
+	cnvs.value.addEventListener("mousemove", (e) => {
 		focusY = e.clientY;
 		let dx = e.clientX - mouseDownX;
 		let dy = e.clientY - mouseDownY;
@@ -1630,7 +1665,7 @@ onMounted(() => {
 		if (!mouseDown) {
 			let { date, resize, slice, ms, resizeTime } = paint({
 				x: e.clientX,
-				y: e.clientY
+				y: e.clientY,
 			});
 
 			targetedAction.resize = resize;
@@ -1651,7 +1686,7 @@ onMounted(() => {
 		if (mouseDown && targetedAction.resize) {
 			let { ms } = paint({
 				x: e.clientX,
-				y: e.clientY
+				y: e.clientY,
 			});
 
 			let times = getNormalizedTimes(new Date(ms));
@@ -1686,45 +1721,76 @@ onMounted(() => {
 
 	centerCalendar();
 
-	document.addEventListener("wheel", e => {
-		let delta = e.deltaY;
-		coolDown = 3;
+	document.addEventListener("gesturestart", function (e) {
+		e.preventDefault();
+		document.body.style.zoom = 0.99;
+	});
 
-		if (zoomLevel.value > 0) {
-			{
-				let py = e.clientY;
-				let ty = (py - calendarY.value) / calendarScale.value;
+	document.addEventListener("gesturechange", function (e) {
+		e.preventDefault();
 
-				calendarScale.value -= (e.deltaY / 1000) * calendarScale.value;
-				calendarScale.value = Math.min(
-					90,
-					Math.max(1, calendarScale.value)
-				);
+		document.body.style.zoom = 0.99;
+	});
+	document.addEventListener("gestureend", function (e) {
+		e.preventDefault();
+		document.body.style.zoom = 1;
+	});
 
-				calendarY.value = -ty * calendarScale.value + py;
+	interact(cnvs.value).gesturable({
+		listeners: {
+			start(event) {},
+			move(event) {
+				console.log(event);
+			},
+			end(event) {},
+		},
+	});
 
-				if (calendarScale.value <= 1.001) {
-					zoomLevel.value = 0;
+	document.addEventListener(
+		"wheel",
+		(e) => {
+			e.preventDefault();
+			let delta = e.deltaY;
+			coolDown = 3;
+
+			if (zoomLevel.value > 0) {
+				{
+					let py = e.clientY;
+					let ty = (py - calendarY.value) / calendarScale.value;
+
+					calendarScale.value -=
+						(e.deltaY / 1000) * calendarScale.value;
+					calendarScale.value = Math.min(
+						90,
+						Math.max(1, calendarScale.value)
+					);
+
+					calendarY.value = -ty * calendarScale.value + py;
+
+					if (calendarScale.value <= 1.001) {
+						zoomLevel.value = 0;
+					} else {
+						zoomLevel.value = 0.01;
+					}
+
+					centerCalendar();
+				}
+			} else {
+				calendarScale.value = 1;
+
+				if (delta > 0) {
+					zoomLevel.value -= 0.25;
 				} else {
-					zoomLevel.value = 0.01;
+					zoomLevel.value += 0.25;
 				}
 
 				centerCalendar();
 			}
-		} else {
-			calendarScale.value = 1;
 
-			if (delta > 0) {
-				zoomLevel.value -= 0.25;
-			} else {
-				zoomLevel.value += 0.25;
-			}
-
-			centerCalendar();
-		}
-
-		clampZoom();
-	});
+			clampZoom();
+		},
+		{ passive: false }
+	);
 });
 </script>
 
