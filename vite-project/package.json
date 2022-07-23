@@ -15,6 +15,7 @@
     "date-fns": "^2.28.0",
     "firebase": "^9.6.2",
     "firebaseui": "^6.0.0",
+    "font-awesome-icon-chars": "^2.6.0",
     "interactjs": "^1.10.11",
     "invert-color": "^2.0.0",
     "vfa-picker": "^5.9.1",
