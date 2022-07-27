@@ -34,7 +34,7 @@ import {
 	arrayUnion,
 	deleteField,
 	query,
-	where,
+	where
 } from "firebase/firestore";
 
 import {
@@ -56,13 +56,13 @@ import {
 	subDays,
 	startOfDay,
 	endOfDay,
-	isSameMonth,
+	isSameMonth
 } from "date-fns";
 
 const props = defineProps({
 	user: Object,
 	db: Object,
-	blocks: Array,
+	blocks: Array
 });
 
 let db = props.db;
@@ -80,7 +80,7 @@ let mutation = {
 	fromChunk: null,
 	fromKey: null,
 	toChunk: null,
-	toKey: null,
+	toKey: null
 };
 
 const chunkIntervalSeconds = 60 * 60 * 24 * 14;
@@ -105,10 +105,10 @@ function getOrEnqueueChunkData(chunkId) {
 
 	chunks[chunkId] = {
 		unsubscribe: null,
-		data: null,
+		data: null
 	};
 
-	const unsubscribe = onSnapshot(getChunkRef(chunkId), (snapshot) => {
+	const unsubscribe = onSnapshot(getChunkRef(chunkId), snapshot => {
 		let d = snapshot.data();
 
 		if (d) {
@@ -136,6 +136,95 @@ function getNormalizedTimes(date) {
 	let chunkMs = parseInt(cid) * 1000;
 
 	return [cid, Math.floor((targetMs - chunkMs) / 1000).toString()];
+}
+
+function chunkAndKeyToMs(chunk, key) {
+	return parseInt(chunk) * 1000 + parseInt(key) * 1000;
+}
+
+function getBlockBounds(date) {
+	let cid = dateToChunkId(date);
+	let chunkData = getOrEnqueueChunkData(cid);
+
+	let min = {
+		chunk: null,
+		key: null
+	};
+	let mid = {
+		chunk: null,
+		key: null
+	};
+	let max = {
+		chunk: null,
+		key: null
+	};
+	let targetMs = date.getTime();
+
+	let chunkBeforeId = (parseInt(cid) - 60 * 60 * 24 * 7 * 2).toString();
+	let chunkBeforeData = getOrEnqueueChunkData(chunkBeforeId);
+	let chunkBeforeMs = parseInt(chunkBeforeId) * 1000;
+
+	if (chunkBeforeData && chunkBeforeData.log)
+		for (let k of Object.keys(chunkBeforeData.log)) {
+			let ms = chunkBeforeMs + parseInt(k) * 1000;
+			if (ms < targetMs) {
+				min.chunk = chunkBeforeId;
+				min.key = k;
+			} else if (ms > targetMs) {
+				max.chunk = chunkBeforeId;
+				max.key = k;
+				break;
+			} else {
+				mid.chunk = chunkBeforeId;
+				mid.key = k;
+			}
+		}
+
+	if (mid.chunk && max.chunk) {
+		return { min, mid, max };
+	}
+
+	let chunkMs = parseInt(cid) * 1000;
+	for (let k of Object.keys(chunkData.log)) {
+		let ms = chunkMs + parseInt(k) * 1000;
+		if (ms < targetMs) {
+			min.chunk = cid;
+			min.key = k;
+		} else if (ms > targetMs) {
+			max.chunk = cid;
+			max.key = k;
+			break;
+		} else {
+			mid.chunk = cid;
+			mid.key = k;
+		}
+	}
+
+	if (mid.chunk && max.chunk) {
+		return { min, mid, max };
+	}
+
+	let chunkAfterId = (parseInt(cid) + 60 * 60 * 24 * 7 * 2).toString();
+	let chunkAfterData = getOrEnqueueChunkData(chunkAfterId);
+	let chunkAfterMs = parseInt(chunkAfterId) * 1000;
+
+	if (chunkAfterData && chunkAfterData.log)
+		for (let k of Object.keys(chunkAfterData.log)) {
+			let ms = chunkAfterMs + parseInt(k) * 1000;
+			if (ms < targetMs) {
+				min.chunk = chunkAfterId;
+				min.key = k;
+			} else if (ms > targetMs) {
+				max.chunk = chunkAfterId;
+				max.key = k;
+				break;
+			} else {
+				mid.chunk = chunkAfterId;
+				mid.key = k;
+			}
+		}
+
+	return { min, mid, max };
 }
 
 async function getBlockAt(date) {
@@ -188,7 +277,7 @@ function writeLogEntry(date, block) {
 	let relativeS = Math.floor(relativeMs / 1000);
 
 	return updateDoc(cRef, {
-		[["log." + relativeS.toString()]]: block,
+		[["log." + relativeS.toString()]]: block
 	});
 }
 
@@ -227,10 +316,27 @@ function getLogForDay(date) {
 
 		while (currentBlock == "") {
 			if (chunkBefore && chunkBefore.log) {
-				for (let k of Object.keys(chunkBefore.log)) {
+				let readBeforeLog = chunkBefore.log;
+
+				if (mutation.toChunk == chunkBeforeKey) {
+					readBeforeLog = {
+						...chunkBefore.log
+					};
+					let currentBlock = getBlockAtExact(
+						mutation.fromChunk,
+						mutation.fromKey
+					);
+					readBeforeLog[mutation.toKey] = currentBlock;
+				}
+
+				for (let k of Object.keys(readBeforeLog)) {
 					if (
 						mutation.fromChunk == chunkBeforeKey &&
-						mutation.fromKey == k
+						mutation.fromKey == k &&
+						!(
+							mutation.toChunk == chunkBeforeKey &&
+							mutation.toKey == k
+						)
 					) {
 						continue;
 					}
@@ -241,7 +347,7 @@ function getLogForDay(date) {
 					if (ms > dayStart) {
 						break;
 					}
-					currentBlock = chunkBefore.log[k];
+					currentBlock = readBeforeLog[k];
 				}
 			} else {
 				let k = Object.keys(chunk.log)[0];
@@ -266,7 +372,7 @@ function getLogForDay(date) {
 
 		if (mutation.toChunk == chunkKey) {
 			readLog = {
-				...chunk.log,
+				...chunk.log
 			};
 			let currentBlock = getBlockAtExact(
 				mutation.fromChunk,
@@ -290,7 +396,7 @@ function getLogForDay(date) {
 					currentBlock,
 					start / totalMs,
 					ms / totalMs,
-					chunkMs + parseInt(k) * 1000,
+					chunkMs + parseInt(k) * 1000
 				]);
 				start = ms;
 				currentBlock = readLog[k];
@@ -322,10 +428,26 @@ function getLogForDay(date) {
 		if (now > dayEnd) {
 			if (chunkAfter) {
 				// console.log("chunkAfter", chunkAfter);
-				for (let k of Object.keys(chunkAfter.log)) {
+				let readAfterLog = chunkAfter.log;
+
+				if (mutation.toChunk == chunkAfterKey) {
+					readAfterLog = {
+						...chunkAfter.log
+					};
+					let currentBlock = getBlockAtExact(
+						mutation.fromChunk,
+						mutation.fromKey
+					);
+					readAfterLog[mutation.toKey] = currentBlock;
+				}
+				for (let k of Object.keys(readAfterLog)) {
 					if (
 						mutation.fromChunk == chunkAfterKey &&
-						mutation.fromKey == k
+						mutation.fromKey == k &&
+						!(
+							mutation.toChunk == chunkAfterKey &&
+							mutation.toKey == k
+						)
 					) {
 						continue;
 					}
@@ -336,10 +458,10 @@ function getLogForDay(date) {
 							currentBlock,
 							start / totalMs,
 							ms / totalMs,
-							chunkAfterMs + parseInt(k) * 1000,
+							chunkAfterMs + parseInt(k) * 1000
 						]);
 						start = ms;
-						currentBlock = chunkAfter.log[k];
+						currentBlock = readAfterLog[k];
 					}
 				}
 			} else {
@@ -349,7 +471,7 @@ function getLogForDay(date) {
 			log.push([
 				currentBlock,
 				start / totalMs,
-				(now - dayStart) / totalMs,
+				(now - dayStart) / totalMs
 			]);
 		}
 
@@ -362,7 +484,7 @@ function getLogForDay(date) {
 const cnvs = ref(null);
 let cnvsSize = {
 	x: 0,
-	y: 0,
+	y: 0
 };
 
 const focusDay = ref(new Date());
@@ -389,7 +511,7 @@ class DaySlot {
 			height: 0,
 			scale: 0,
 			time: 0,
-			rendered: false,
+			rendered: false
 		};
 	}
 }
@@ -414,12 +536,19 @@ class WeekLayout extends ViewLayout {
 	}
 
 	render() {
+		if (window.innerWidth < 900) {
+			this.rows = 1;
+			this.columns = 1;
+			this.slots.push(new DaySlot(this.week));
+			return;
+		}
+
 		this.rows = 1;
 		this.columns = 7;
 
 		let days = eachDayOfInterval({
 			start: startOfWeek(this.week),
-			end: endOfWeek(this.week),
+			end: endOfWeek(this.week)
 		});
 
 		for (let d of days) {
@@ -433,6 +562,10 @@ class WeekLayout extends ViewLayout {
 			(Math.min(cnvsSize.x - 400) - this.columns * margin) / this.columns;
 		let rowHeight = cnvsSize.y - 300;
 
+		if (window.innerWidth < 900) {
+			rowWidth = cnvsSize.x - 200;
+		}
+
 		let row = 0;
 		let column = slotIndex;
 		return {
@@ -440,7 +573,7 @@ class WeekLayout extends ViewLayout {
 			y: row * rowHeight,
 			width: rowWidth,
 			height: rowHeight,
-			radii: 10,
+			radii: 10
 		};
 	}
 }
@@ -457,7 +590,7 @@ class MonthLayout extends ViewLayout {
 
 		let days = eachDayOfInterval({
 			start: startOfWeek(startOfMonth(this.month)),
-			end: endOfWeek(endOfMonth(this.month)),
+			end: endOfWeek(endOfMonth(this.month))
 		});
 
 		for (let d of days) {
@@ -482,7 +615,7 @@ class MonthLayout extends ViewLayout {
 			y: row * (rowHeight + margin),
 			width: rowWidth,
 			height: rowHeight,
-			radii: 10,
+			radii: 10
 		};
 	}
 }
@@ -501,7 +634,7 @@ class YearLayout extends ViewLayout {
 			let month = addMonths(startOfYear(this.year), i);
 			let days = eachDayOfInterval({
 				start: startOfMonth(month),
-				end: endOfMonth(month),
+				end: endOfMonth(month)
 			});
 			for (let d of days) {
 				this.slots.push(new DaySlot(d));
@@ -521,7 +654,7 @@ class YearLayout extends ViewLayout {
 			y: row * 40 * 6 + row * 40 + weekOfMonth * 40,
 			width: 30,
 			height: 30,
-			radii: 30,
+			radii: 30
 		};
 	}
 }
@@ -548,7 +681,7 @@ function getViewLayouts(day, zoom, slide) {
 				}),
 				to: cacheLayout("y-" + day2.getFullYear(), () => {
 					return new YearLayout(day2);
-				}),
+				})
 			};
 		} else if (zoom == -1) {
 			let day2 = addMonths(day, slide);
@@ -564,7 +697,7 @@ function getViewLayouts(day, zoom, slide) {
 					() => {
 						return new MonthLayout(day2);
 					}
-				),
+				)
 			};
 		} else if (zoom >= 0) {
 			let day2 = addWeeks(day, slide);
@@ -580,7 +713,7 @@ function getViewLayouts(day, zoom, slide) {
 					() => {
 						return new WeekLayout(day2);
 					}
-				),
+				)
 			};
 		}
 
@@ -597,7 +730,7 @@ function getViewLayouts(day, zoom, slide) {
 				() => {
 					return new MonthLayout(day);
 				}
-			),
+			)
 		};
 	} else if (zoom == -1) {
 		return {
@@ -612,7 +745,7 @@ function getViewLayouts(day, zoom, slide) {
 				() => {
 					return new WeekLayout(day);
 				}
-			),
+			)
 		};
 	} else if (zoom >= 0) {
 		return {
@@ -627,7 +760,7 @@ function getViewLayouts(day, zoom, slide) {
 				() => {
 					return new WeekLayout(day);
 				}
-			),
+			)
 		};
 	}
 }
@@ -823,7 +956,7 @@ function paint(mouseCheck) {
 			x: Infinity,
 			y: Infinity,
 			width: 0,
-			height: 0,
+			height: 0
 		};
 
 		for (let day of Object.keys(days)) {
@@ -851,17 +984,17 @@ function paint(mouseCheck) {
 	let fromBounds = calcBounds(renderDaysFrom);
 	let toBounds = calcBounds(renderDaysTo);
 
-	let fromBoundsOverlap = calcBounds(renderDaysFrom, (day) => {
+	let fromBoundsOverlap = calcBounds(renderDaysFrom, day => {
 		return dateToKey(day.date) in renderDaysTo;
 	});
 
 	let fromCenterOffset = {
 		x: (cnvsSize.x - fromBounds.width) / 2,
-		y: (cnvsSize.y - fromBounds.height) / 2,
+		y: (cnvsSize.y - fromBounds.height) / 2
 	};
 	let toCenterOffset = {
 		x: (cnvsSize.x - toBounds.width) / 2,
-		y: (cnvsSize.y - toBounds.height) / 2,
+		y: (cnvsSize.y - toBounds.height) / 2
 	};
 
 	let fromTransformer = {
@@ -876,25 +1009,25 @@ function paint(mouseCheck) {
 		translateY:
 			fromBounds.y +
 			fromBounds.height / 2 -
-			(fromBoundsOverlap.y + fromBoundsOverlap.height / 2),
+			(fromBoundsOverlap.y + fromBoundsOverlap.height / 2)
 	};
 
 	let inactive = {
 		r: 246,
 		g: 246,
-		b: 246,
+		b: 246
 	};
 	let active = {
 		r: 230,
 		g: 230,
-		b: 230,
+		b: 230
 	};
 
 	let snapMousePos = -1;
 
 	for (let day of [
 		...Object.keys(renderDaysFrom),
-		...Object.keys(renderDaysTo),
+		...Object.keys(renderDaysTo)
 	]) {
 		let slot = renderDays[day];
 		let slotFrom = renderDaysFrom[day];
@@ -905,7 +1038,7 @@ function paint(mouseCheck) {
 			y: 0,
 			width: 0,
 			height: 0,
-			color: { r: 0, g: 0, b: 0 },
+			color: { r: 0, g: 0, b: 0 }
 		};
 		let opacity = 1;
 		if (zoomSmooth >= 0 && Math.abs(slideSmooth) < 0.01 && slotFrom) {
@@ -913,7 +1046,7 @@ function paint(mouseCheck) {
 			box.color = {
 				r: fromColor.r,
 				g: fromColor.g,
-				b: fromColor.b,
+				b: fromColor.b
 			};
 
 			box.x = fromCenterOffset.x + slotFrom.render.x;
@@ -928,7 +1061,7 @@ function paint(mouseCheck) {
 			box.color = {
 				r: lerp(fromColor.r, toColor.r, lerpValue),
 				g: lerp(fromColor.g, toColor.g, lerpValue),
-				b: lerp(fromColor.b, toColor.b, lerpValue),
+				b: lerp(fromColor.b, toColor.b, lerpValue)
 			};
 
 			box.x = lerp(
@@ -966,7 +1099,7 @@ function paint(mouseCheck) {
 					y: fromCenterOffset.y + slotFrom.render.y,
 					width: slotFrom.render.width,
 					height: slotFrom.render.height,
-					radii: slotFrom.render.radii,
+					radii: slotFrom.render.radii
 				};
 			} else {
 				opacity = Math.max(0, 1 - lerpValue * 2);
@@ -975,22 +1108,23 @@ function paint(mouseCheck) {
 					y: fromCenterOffset.y + slotFrom.render.y,
 					width: slotFrom.render.width,
 					height: slotFrom.render.height,
-					radii: slotFrom.render.radii,
+					radii: slotFrom.render.radii
 				};
-
-				let sx = lerp(1, (1 / fromTransformer.scaleX) * 1.5, lerpValue);
-				let sy = lerp(1, (1 / fromTransformer.scaleY) * 1.5, lerpValue);
-				sx = sy = Math.max(sx, sy);
-				let ox = fromTransformer.originX;
-				let oy = fromTransformer.originY;
 			}
 
 			let fromColor = slotFrom.active ? active : inactive;
 			box.color = {
 				r: fromColor.r,
 				g: fromColor.g,
-				b: fromColor.b,
+				b: fromColor.b
 			};
+
+			// let sx = lerp(1, (1 / fromTransformer.scaleX) * 1.5, lerpValue);
+			// 	let sy = lerp(1, (1 / fromTransformer.scaleY) * 1.5, lerpValue);
+			// 	sx = sy = Math.max(sx, sy);
+
+			// let ox = fromTransformer.originX;
+			// let oy = fromTransformer.originY;
 			// box.x -= ox;
 			// box.y -= oy;
 			// box.x *= sx;
@@ -1034,7 +1168,7 @@ function paint(mouseCheck) {
 					y: toCenterOffset.y + slotTo.render.y,
 					width: slotTo.render.width,
 					height: slotTo.render.height,
-					radii: slotTo.render.radii,
+					radii: slotTo.render.radii
 				};
 			} else {
 				opacity = lerpValue;
@@ -1043,7 +1177,7 @@ function paint(mouseCheck) {
 					y: toCenterOffset.y + slotTo.render.y,
 					width: slotTo.render.width,
 					height: slotTo.render.height,
-					radii: slotTo.render.radii,
+					radii: slotTo.render.radii
 				};
 			}
 
@@ -1051,7 +1185,7 @@ function paint(mouseCheck) {
 			box.color = {
 				r: toColor.r,
 				g: toColor.g,
-				b: toColor.b,
+				b: toColor.b
 			};
 		}
 
@@ -1135,7 +1269,8 @@ function paint(mouseCheck) {
 							);
 
 							if (
-								zoomSmooth >= 0 &&
+								slotTo &&
+								zoomSmooth >= -1 &&
 								(item[2] - item[1]) * box.height > 10
 							) {
 								ctx.font = `900 ${Math.min(
@@ -1144,7 +1279,10 @@ function paint(mouseCheck) {
 								)}px 'Font Awesome 6 Free'`;
 								ctx.textAlign = "center";
 								ctx.textBaseline = "middle";
-								ctx.fillStyle = "white";
+								ctx.fillStyle = `rgba(255,255,255,${Math.min(
+									1 + zoomSmooth,
+									1
+								)})`;
 								// console.log(block.icon);
 								let filterKey = filterIcon(
 									block.icon || block.name
@@ -1219,7 +1357,7 @@ function paint(mouseCheck) {
 													width: box.width,
 													height:
 														(item[2] - item[1]) *
-														box.height,
+														box.height
 												};
 											}
 										} else {
@@ -1298,7 +1436,7 @@ function paint(mouseCheck) {
 									x: box.x,
 									y: box.y + item[1] * box.height,
 									width: box.width,
-									height: (item[2] - item[1]) * box.height,
+									height: (item[2] - item[1]) * box.height
 								};
 							}
 
@@ -1353,6 +1491,11 @@ function paint(mouseCheck) {
 		let mousePosDayScreen =
 			calendarYSmooth + 780 * mousePosDay * calendarScaleSmooth;
 
+		let margin = 200;
+		if (window.innerWidth < 900) {
+			margin = 60;
+		}
+
 		for (let y = startDayX; y < endDayX; y += snapping) {
 			let screenY = calendarYSmooth + 780 * y * calendarScaleSmooth;
 			if (Math.abs(mousePosDayScreen - screenY) < 20) continue;
@@ -1360,8 +1503,8 @@ function paint(mouseCheck) {
 			ctx.strokeStyle = "rgba(0, 0, 0, 0.03)";
 			ctx.lineWidth = 1;
 			ctx.beginPath();
-			ctx.moveTo(200, screenY);
-			ctx.lineTo(cnvsSize.x - 200, screenY);
+			ctx.moveTo(margin, screenY);
+			ctx.lineTo(cnvsSize.x - margin, screenY);
 			ctx.stroke();
 
 			let str = formatTimeClockMode(y * 24);
@@ -1369,7 +1512,7 @@ function paint(mouseCheck) {
 			ctx.textAlign = "right";
 			ctx.textBaseline = "middle";
 			ctx.font = "16px Overpass";
-			ctx.fillText(str, 195, screenY);
+			ctx.fillText(str, margin - 5, screenY);
 		}
 
 		if (mousePosDay >= 0 && mousePosDay <= 1) {
@@ -1382,8 +1525,8 @@ function paint(mouseCheck) {
 				ctx.moveTo(blockTarget.x + 13, screenY);
 				ctx.lineTo(blockTarget.x + blockTarget.width, screenY);
 			} else {
-				ctx.moveTo(200, screenY);
-				ctx.lineTo(cnvsSize.x - 200, screenY);
+				ctx.moveTo(margin, screenY);
+				ctx.lineTo(cnvsSize.x - margin, screenY);
 			}
 			ctx.stroke();
 
@@ -1393,7 +1536,7 @@ function paint(mouseCheck) {
 			ctx.textAlign = "right";
 			ctx.textBaseline = "middle";
 			ctx.font = "16px Overpass";
-			ctx.fillText(str, 195, screenY);
+			ctx.fillText(str, margin - 5, screenY);
 		}
 		// for (let i = start; i < end; i += snapping) {
 		// 	// let currentSpot = (i + calendarYSmooth) * calendarScaleSmooth;
@@ -1422,6 +1565,12 @@ function paint(mouseCheck) {
 
 		if (closestDay) {
 			ms = closestDay.getTime() + mousePosDay * 24 * 60 * 60 * 1000;
+			if (mousePosDay < 0) {
+				ms = closestDay.getTime();
+			}
+			if (mousePosDay > 1) {
+				ms = closestDay.getTime() + 24 * 60 * 60 * 1000;
+			}
 		}
 
 		return {
@@ -1429,7 +1578,7 @@ function paint(mouseCheck) {
 			resize: resizeTarget,
 			slice: sliceTarget,
 			resizeTime,
-			ms,
+			ms
 		};
 	}
 }
@@ -1476,20 +1625,22 @@ onMounted(() => {
 		let dt = now - last;
 		last = now;
 
+		let lerpSpeed = 0.018;
+
 		calendarYSmooth = lerp(
 			calendarYSmooth,
 			calendarY.value,
-			Math.max(Math.min(dt * 0.009, 0.9), 0.0001)
+			Math.max(Math.min(dt * lerpSpeed, 0.9), 0.0001)
 		);
 		calendarScaleSmooth = lerp(
 			calendarScaleSmooth,
 			calendarScale.value,
-			Math.max(Math.min(dt * 0.009, 0.9), 0.0001)
+			Math.max(Math.min(dt * lerpSpeed, 0.9), 0.0001)
 		);
 		zoomSmooth = lerp(
 			zoomSmooth,
 			zoomLevel.value,
-			Math.max(Math.min(dt * 0.009, 0.9), 0.0001)
+			Math.max(Math.min(dt * lerpSpeed, 0.9), 0.0001)
 		);
 
 		if (Math.abs(zoomSmooth - zoomLevel.value) < 0.001) {
@@ -1499,7 +1650,7 @@ onMounted(() => {
 		slideSmooth = lerp(
 			slideSmooth,
 			moveSlide.value,
-			Math.max(Math.min(dt * 0.009, 0.9), 0.0001)
+			Math.max(Math.min(dt * lerpSpeed, 0.9), 0.0001)
 		);
 
 		if (!mouseDown) {
@@ -1541,6 +1692,12 @@ onMounted(() => {
 		paint();
 		requestAnimationFrame(runPaint);
 	}
+
+	setInterval(() => {
+		if (!mouseDown) {
+			checkMousePosition(currentMouseX, currentMouseY);
+		}
+	}, 400);
 
 	let coolDown = 0;
 	let clamZoomCooldown = zoomLevel.value;
@@ -1589,21 +1746,21 @@ onMounted(() => {
 		resize: false,
 		resizeTime: 0,
 		slice: false,
-		targetMs: 0,
+		targetMs: 0
 	};
 
-	cnvs.value.addEventListener("touchstart", async (e) => {
+	cnvs.value.addEventListener("touchstart", async e => {
 		mouseDown = true;
 		mouseDownX = e.touches[0].clientX;
 		mouseDownY = e.touches[0].clientY;
 		calendarYDown = calendarY.value;
 	});
 
-	cnvs.value.addEventListener("touchend", async (e) => {
+	cnvs.value.addEventListener("touchend", async e => {
 		mouseDown = false;
 	});
 
-	cnvs.value.addEventListener("touchmove", async (e) => {
+	cnvs.value.addEventListener("touchmove", async e => {
 		focusY = e.touches[0].clientY;
 		let dx = e.touches[0].clientX - mouseDownX;
 		let dy = e.touches[0].clientY - mouseDownY;
@@ -1626,7 +1783,7 @@ onMounted(() => {
 		}
 	});
 
-	cnvs.value.addEventListener("mousedown", async (e) => {
+	cnvs.value.addEventListener("mousedown", async e => {
 		mouseDown = true;
 		mouseDownX = e.clientX;
 		mouseDownY = e.clientY;
@@ -1645,9 +1802,29 @@ onMounted(() => {
 		}
 	});
 
-	document.addEventListener("mouseup", (e) => {
+	document.addEventListener("mouseup", e => {
 		mouseDown = false;
 		snapSlide();
+
+		if (targetedAction.resize) {
+			let block = getBlockAtExact(mutation.fromChunk, mutation.fromKey);
+			writeLogEntry(
+				new Date(chunkAndKeyToMs(mutation.fromChunk, mutation.fromKey)),
+				deleteField()
+			);
+			if (mutation.toChunk) {
+				writeLogEntry(
+					new Date(chunkAndKeyToMs(mutation.toChunk, mutation.toKey)),
+					block
+				);
+			}
+
+			targetedAction.resize = false;
+			mutation.fromChunk = null;
+			mutation.fromKey = null;
+			mutation.toChunk = null;
+			mutation.toKey = null;
+		}
 	});
 
 	document.addEventListener("mouseleave", () => {
@@ -1655,7 +1832,36 @@ onMounted(() => {
 		snapSlide();
 	});
 
-	cnvs.value.addEventListener("mousemove", (e) => {
+	function checkMousePosition(x, y) {
+		let { date, resize, slice, ms, resizeTime } = paint({
+			x,
+			y
+		});
+
+		targetedAction.resize = resize;
+		targetedAction.slice = slice;
+		targetedAction.date = date;
+		targetedAction.resizeTime = resizeTime;
+		targetedAction.targetMs = ms;
+
+		if (resize) {
+			cnvs.value.style.cursor = "ns-resize";
+		} else if (slice) {
+			cnvs.value.style.cursor = "pointer";
+		} else {
+			cnvs.value.style.cursor = "";
+		}
+
+		if (!mouseDown) {
+			if (slideSmooth > 0.1) return;
+
+			if (targetedAction.date) {
+				targetedDate = targetedAction.date;
+			}
+		}
+	}
+
+	cnvs.value.addEventListener("mousemove", e => {
 		focusY = e.clientY;
 		let dx = e.clientX - mouseDownX;
 		let dy = e.clientY - mouseDownY;
@@ -1663,36 +1869,34 @@ onMounted(() => {
 		currentMouseY = e.clientY;
 
 		if (!mouseDown) {
-			let { date, resize, slice, ms, resizeTime } = paint({
-				x: e.clientX,
-				y: e.clientY,
-			});
-
-			targetedAction.resize = resize;
-			targetedAction.slice = slice;
-			targetedAction.date = date;
-			targetedAction.resizeTime = resizeTime;
-			targetedAction.targetMs = ms;
-
-			if (resize) {
-				cnvs.value.style.cursor = "ns-resize";
-			} else if (slice) {
-				cnvs.value.style.cursor = "pointer";
-			} else {
-				cnvs.value.style.cursor = "";
-			}
+			checkMousePosition(e.clientX, e.clientY);
 		}
 
 		if (mouseDown && targetedAction.resize) {
 			let { ms } = paint({
 				x: e.clientX,
-				y: e.clientY,
+				y: e.clientY
 			});
 
-			let times = getNormalizedTimes(new Date(ms));
+			let bounds = getBlockBounds(new Date(targetedAction.resizeTime));
+			let minMs = chunkAndKeyToMs(bounds.min.chunk, bounds.min.key);
+			let maxMs = chunkAndKeyToMs(bounds.max.chunk, bounds.max.key);
 
-			mutation.toChunk = times[0];
-			mutation.toKey = times[1];
+			if (isNaN(minMs)) {
+				minMs = 0;
+			}
+
+			let times = getNormalizedTimes(
+				new Date(Math.min(maxMs, Math.max(minMs, ms)))
+			);
+
+			if (ms >= maxMs) {
+				mutation.toChunk = null;
+				mutation.toKey = null;
+			} else {
+				mutation.toChunk = times[0];
+				mutation.toKey = times[1];
+			}
 
 			return;
 		}
@@ -1710,28 +1914,22 @@ onMounted(() => {
 		if (mouseDown) {
 			moveSlide.value =
 				-1 * Math.min(0.998, Math.max(-0.998, dx / (cnvsSize.x / 2)));
-		} else {
-			if (slideSmooth > 0.1) return;
-
-			if (targetedAction.date) {
-				targetedDate = targetedAction.date;
-			}
 		}
 	});
 
 	centerCalendar();
 
-	document.addEventListener("gesturestart", function (e) {
+	document.addEventListener("gesturestart", function(e) {
 		e.preventDefault();
 		document.body.style.zoom = 0.99;
 	});
 
-	document.addEventListener("gesturechange", function (e) {
+	document.addEventListener("gesturechange", function(e) {
 		e.preventDefault();
 
 		document.body.style.zoom = 0.99;
 	});
-	document.addEventListener("gestureend", function (e) {
+	document.addEventListener("gestureend", function(e) {
 		e.preventDefault();
 		document.body.style.zoom = 1;
 	});
@@ -1742,13 +1940,13 @@ onMounted(() => {
 			move(event) {
 				console.log(event);
 			},
-			end(event) {},
-		},
+			end(event) {}
+		}
 	});
 
 	document.addEventListener(
 		"wheel",
-		(e) => {
+		e => {
 			e.preventDefault();
 			let delta = e.deltaY;
 			coolDown = 3;
