@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, toRef } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, toRef } from "vue";
 
 import "../roundRect.js";
 
@@ -18,6 +18,9 @@ import interact from "interactjs";
 import charMap from "../unicode.js";
 
 import { filterIcon } from "../iconer.js";
+
+import Selector from "./Selector.vue";
+import Dialog from "./Dialog.vue";
 
 import {
 	getFirestore,
@@ -56,13 +59,18 @@ import {
 	subDays,
 	startOfDay,
 	endOfDay,
-	isSameMonth
+	isSameMonth,
+	addDays,
+	getDaysInMonth
 } from "date-fns";
+
+import { formatTime, formatSeconds } from "../time.js";
 
 const props = defineProps({
 	user: Object,
 	db: Object,
-	blocks: Array
+	blocks: Array,
+	active: Boolean
 });
 
 let db = props.db;
@@ -74,6 +82,19 @@ let blocksMap = computed(() =>
 	}, {})
 );
 
+const autoPos = ref({ x: 0, y: 0 });
+
+const tabActive = computed(() => props.active);
+
+let blocks = computed(() => {
+	let result = props.blocks.reduce((res, obj) => {
+		if (res[obj.color]) res[obj.color].push(obj);
+		else res[obj.color] = [obj];
+		return res;
+	}, {});
+	return Object.values(result).flat();
+});
+
 let chunks = {};
 
 let mutation = {
@@ -82,6 +103,8 @@ let mutation = {
 	toChunk: null,
 	toKey: null
 };
+
+const selectingType = ref(false);
 
 const chunkIntervalSeconds = 60 * 60 * 24 * 14;
 
@@ -97,6 +120,7 @@ function getChunkRef(chunkId) {
 }
 
 let yearRerenderTimeout = null;
+let monthRerenderTimeout = null;
 
 function getOrEnqueueChunkData(chunkId) {
 	if (chunks[chunkId]) {
@@ -122,6 +146,24 @@ function getOrEnqueueChunkData(chunkId) {
 				yearRerenderTimeout = setTimeout(() => {
 					getYearCache(year, true);
 				}, 1000);
+			}
+
+			let months = [];
+			for (let d = 0; d < 14; d++) {
+				let mDate = new Date(
+					parseInt(chunkId) * 1000 + d * 24 * 60 * 60 * 1000
+				);
+				let month =
+					mDate.getUTCFullYear() + "-" + (mDate.getUTCMonth() + 1);
+				if (!months.includes(month)) {
+					months.push(month);
+				}
+			}
+			console.log(months);
+			for (let month of months) {
+				if (monthCaches.has(month)) {
+					getMonthCache(month, true);
+				}
 			}
 		}
 	});
@@ -224,6 +266,14 @@ function getBlockBounds(date) {
 			}
 		}
 
+	if (!max.chunk) {
+		let nowDate = new Date();
+		max.chunk = dateToChunkId(nowDate);
+		max.key = Math.floor(
+			(nowDate.getTime() - parseInt(max.chunk) * 1000) / 1000
+		).toString();
+	}
+
 	return { min, mid, max };
 }
 
@@ -260,6 +310,11 @@ async function getBlockAt(date) {
 	}
 
 	return block;
+}
+
+async function updateTargetType(toBlockId) {
+	let time = new Date(targetedAction.typeTime);
+	writeLogEntry(time, toBlockId);
 }
 
 function writeLogEntry(date, block) {
@@ -853,19 +908,30 @@ function getViewLayouts(day, zoom, slide) {
 			};
 		} else if (zoom >= 0) {
 			let day2 = addWeeks(day, slide);
+			let k1 = getWeek(day);
+			let k2 = getWeek(day2);
+			if (window.innerWidth < 900) {
+				day2 = addDays(day, slide);
+				k1 =
+					day.getFullYear() +
+					"-" +
+					day.getMonth() +
+					"-" +
+					day.getDate();
+				k2 =
+					day2.getFullYear() +
+					"-" +
+					day2.getMonth() +
+					"-" +
+					day2.getDate();
+			}
 			return {
-				from: cacheLayout(
-					"yw-" + day.getFullYear() + "-" + getWeek(day),
-					() => {
-						return new WeekLayout(day);
-					}
-				),
-				to: cacheLayout(
-					"yw-" + day2.getFullYear() + "-" + getWeek(day2),
-					() => {
-						return new WeekLayout(day2);
-					}
-				)
+				from: cacheLayout("yw-" + day.getFullYear() + "-" + k1, () => {
+					return new WeekLayout(day);
+				}),
+				to: cacheLayout("yw-" + day2.getFullYear() + "-" + k2, () => {
+					return new WeekLayout(day2);
+				})
 			};
 		}
 
@@ -885,6 +951,10 @@ function getViewLayouts(day, zoom, slide) {
 			)
 		};
 	} else if (zoom == -1) {
+		let k2 = getWeek(day);
+		if (window.innerWidth < 900) {
+			k2 = day.getMonth() + "-" + day.getDate();
+		}
 		return {
 			from: cacheLayout(
 				"ym-" + day.getFullYear() + "-" + day.getMonth(),
@@ -892,27 +962,22 @@ function getViewLayouts(day, zoom, slide) {
 					return new MonthLayout(day);
 				}
 			),
-			to: cacheLayout(
-				"yw-" + day.getFullYear() + "-" + getWeek(day),
-				() => {
-					return new WeekLayout(day);
-				}
-			)
+			to: cacheLayout("yw-" + day.getFullYear() + "-" + k2, () => {
+				return new WeekLayout(day);
+			})
 		};
 	} else if (zoom >= 0) {
+		let k1 = getWeek(day);
+		if (window.innerWidth < 900) {
+			k1 = day.getMonth() + "-" + day.getDate();
+		}
 		return {
-			from: cacheLayout(
-				"yw-" + day.getFullYear() + "-" + getWeek(day),
-				() => {
-					return new WeekLayout(day);
-				}
-			),
-			to: cacheLayout(
-				"yw-" + day.getFullYear() + "-" + getWeek(day),
-				() => {
-					return new WeekLayout(day);
-				}
-			)
+			from: cacheLayout("yw-" + day.getFullYear() + "-" + k1, () => {
+				return new WeekLayout(day);
+			}),
+			to: cacheLayout("yw-" + day.getFullYear() + "-" + k1, () => {
+				return new WeekLayout(day);
+			})
 		};
 	}
 }
@@ -932,11 +997,9 @@ function dateToKey(d) {
 let zoomSmooth = zoomLevel.value;
 let slideSmooth = moveSlide.value;
 
-let monthCacheCanvas = document.createElement("canvas");
-let monthCacheCtx = monthCacheCanvas.getContext("2d");
-
 let yearKeys = [null, null];
 let yearCaches = new Map();
+let monthCaches = new Map();
 
 function getYearCache(yearKey, rerender) {
 	if (!yearCaches.has(yearKey)) {
@@ -954,45 +1017,14 @@ function getYearCache(yearKey, rerender) {
 		rerender = true;
 	}
 
-	// let baseX = 0;
-
-	// if (yearKeys[0] == null) {
-	// 	yearKeys[0] = yearKey;
-	// 	baseX = 0;
-	// } else if (yearKeys[0] == yearKey) {
-	// 	if (!rerender) {
-	// 		return baseX;
-	// 	}
-	// } else if (yearKeys[1] == null) {
-	// 	yearKeys[1] = yearKey;
-	// 	baseX = 365;
-	// } else if (yearKeys[1] == yearKey) {
-	// 	if (!rerender) {
-	// 		return baseX + 365;
-	// 	} else {
-	// 		baseX = 365;
-	// 	}
-	// } else {
-	// 	yearKeys[1] = yearKeys[0];
-	// 	yearCacheCtx.drawImage(yearCacheCanvas, 0, 0, 365, 40, 365, 0, 365, 40);
-
-	// 	yearKeys[0] = yearKey;
-	// 	baseX = 0;
-	// }
-
 	if (rerender) {
 		let yearCacheCtx = yearCaches.get(yearKey).ctx;
 
 		for (let d = 0; d < 365; d++) {
 			setTimeout(() => {
-				// for (let y = 0; y < 40; y++) {
 				let dte = new Date(yearKey, 0, 0);
 				dte.setDate(dte.getDate() + d);
 				let log = getLogForDay(dte);
-				// let r = Math.random() * 255;
-				// let g = Math.random() * 255;
-				// let b = Math.random() * 255;
-				// yearCacheCtx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
 				if (log) {
 					for (let item of log) {
 						let block = blocksMap.value[item[0]];
@@ -1007,12 +1039,69 @@ function getYearCache(yearKey, rerender) {
 						}
 					}
 				}
-				// }
 			}, d * 4);
 		}
 	}
 
 	return yearCaches.get(yearKey).canvas;
+}
+
+function getMonthCache(monthKey, rerender) {
+	if (!monthCaches.has(monthKey)) {
+		let monthCacheCanvas = document.createElement("canvas");
+		monthCacheCanvas.width = 34;
+		monthCacheCanvas.height = 120;
+		monthCacheCanvas.style["image-rendering"] = "pixelated";
+		let monthCacheCtx = monthCacheCanvas.getContext("2d");
+		monthCacheCtx.imageSmoothingEnabled = false;
+		monthCaches.set(monthKey, {
+			canvas: monthCacheCanvas,
+			ctx: monthCacheCtx
+		});
+
+		rerender = true;
+	}
+
+	if (rerender) {
+		let monthCacheCtx = monthCaches.get(monthKey).ctx;
+
+		let baseDt = new Date(
+			parseInt(monthKey.split("-")[0]),
+			parseInt(monthKey.split("-")[1]),
+			0
+		);
+
+		for (let d = 1; d <= getDaysInMonth(baseDt); d++) {
+			setTimeout(() => {
+				let dte = new Date(
+					`${parseInt(monthKey.split("-")[0])}-${parseInt(
+						monthKey.split("-")[1]
+					)}-1`
+				);
+				dte.setDate(d);
+				let log = getLogForDay(dte);
+				if (log) {
+					// console.log("Did hit", d, dte, monthKey);
+					for (let item of log) {
+						let block = blocksMap.value[item[0]];
+						if (block) {
+							monthCacheCtx.fillStyle = block.color;
+							monthCacheCtx.fillRect(
+								d,
+								item[1] * 120,
+								1,
+								(item[2] - item[1]) * 120
+							);
+						}
+					}
+				} else {
+					// console.log("No hit", d, dte, monthKey);
+				}
+			}, d * 4);
+		}
+	}
+
+	return monthCaches.get(monthKey).canvas;
 }
 
 function centerCalendar() {
@@ -1054,6 +1143,7 @@ function formatTimeClockMode(t) {
 let darkMode = false;
 
 let invalidateTransforms = false;
+let isScaling = false;
 
 function paint(mouseCheck) {
 	let currentDayKey = dateToKey(currentDay.value);
@@ -1062,7 +1152,12 @@ function paint(mouseCheck) {
 	let resizeTarget = false;
 	let resizeTime = 0;
 	let sliceTarget = false;
+	let clickableTarget = false;
+	let typeTarget = false;
+	let typeTime = 0;
 	let blockTarget = null;
+	let boxTarget = null;
+	let mobileResize = false;
 	let doPaint = !mouseCheck;
 
 	if (doPaint) {
@@ -1080,12 +1175,16 @@ function paint(mouseCheck) {
 		lerpValue = zoomSmooth / 3;
 	}
 	let slideVal = 0;
-	if (Math.abs(slideSmooth) > 0.005) {
-		slideVal = slideSmooth < 0 ? -1 : Math.ceil(slideSmooth);
-	}
+	if (!isScaling) {
+		if (Math.abs(slideSmooth) > 0.005) {
+			slideVal = slideSmooth < 0 ? -1 : Math.ceil(slideSmooth);
+		}
 
-	if (slideVal != 0) {
-		lerpValue = Math.abs(slideSmooth);
+		if (slideVal != 0) {
+			lerpValue = Math.abs(slideSmooth);
+		}
+	} else {
+		slideSmooth = 0;
 	}
 
 	let layouts = getViewLayouts(
@@ -1461,29 +1560,80 @@ function paint(mouseCheck) {
 			}
 
 			ctx.globalAlpha;
-			if (zoomSmooth < -1) {
+			let lerpToLower = false;
+			let fullyRendered = false;
+
+			if (currentMouseX > box.x && currentMouseX < box.x + box.width) {
+				if (
+					currentMouseY > box.y &&
+					currentMouseY < box.y + box.height
+				) {
+					boxTarget = box;
+				}
+			}
+
+			function renderYearLevel(opacity) {
 				if (slot instanceof DaySlot) {
 					let yearCanvas = getYearCache(slot.date.getFullYear());
 					let d = getDayOfYear(slot.date);
+					if (window.innerWidth < 900) {
+					} else {
+						let oldAlpha = ctx.globalAlpha;
+						ctx.globalAlpha = opacity;
+
+						ctx.drawImage(
+							yearCanvas,
+							d,
+							0,
+							1,
+							40,
+							box.x,
+							box.y,
+							box.width,
+							box.height
+						);
+
+						ctx.globalAlpha = oldAlpha;
+					}
+				}
+			}
+
+			function renderMonthLevel(opacity) {
+				if (slot instanceof DaySlot) {
+					let monthCanvas = getMonthCache(
+						slot.date.getUTCFullYear() +
+							"-" +
+							(slot.date.getUTCMonth() + 1)
+					);
+					let d = slot.date.getDate();
+					let oldAlpha = ctx.globalAlpha;
+					ctx.globalAlpha = opacity;
+
 					ctx.drawImage(
-						yearCanvas,
+						monthCanvas,
 						d,
 						0,
 						1,
-						40,
+						120,
 						box.x,
 						box.y,
 						box.width,
 						box.height
 					);
+					ctx.globalAlpha = oldAlpha;
 				}
-			} else if (zoomSmooth >= -1) {
+			}
+
+			function renderWeekLevel(opacity) {
 				let log = null;
 
 				if (slot instanceof DaySlot) log = getLogForDay(slot.date);
 				// console.log(log);
 				if (log) {
-					for (let item of log) {
+					let oldAlpha = ctx.globalAlpha;
+					ctx.globalAlpha = opacity;
+
+					for (let [i, item] of log.entries()) {
 						let block = blocksMap.value[item[0]];
 						if (block) {
 							ctx.fillStyle = block.color;
@@ -1493,6 +1643,20 @@ function paint(mouseCheck) {
 								box.width,
 								(item[2] - item[1]) * box.height
 							);
+
+							if (
+								log[i - 1] &&
+								blocksMap.value[log[i - 1][0]].color ==
+									block.color
+							) {
+								ctx.fillStyle = "rgba(255,255,255,0.2)";
+								ctx.fillRect(
+									box.x,
+									box.y + item[1] * box.height,
+									box.width,
+									0.5
+								);
+							}
 
 							if (
 								slotTo &&
@@ -1540,7 +1704,23 @@ function paint(mouseCheck) {
 										block.name,
 										box.x + box.width / 2,
 										box.y +
-											30 +
+											20 +
+											item[1] * box.height +
+											((item[2] - item[1]) * box.height) /
+												2,
+										box.width
+									);
+
+									ctx.font = "400 14px Overpass";
+									ctx.fillStyle = "rgba(255,255,255,0.7)";
+
+									ctx.fillText(
+										formatSeconds(
+											(item[2] - item[1]) * 24 * 60 * 60
+										),
+										box.x + box.width / 2,
+										box.y +
+											35 +
 											item[1] * box.height +
 											((item[2] - item[1]) * box.height) /
 												2,
@@ -1611,7 +1791,25 @@ function paint(mouseCheck) {
 							// console.log(blocks.value.find(b => b.id));
 						}
 					}
+
+					ctx.globalAlpha = oldAlpha;
 				}
+			}
+
+			if (zoomSmooth < -1) {
+				renderYearLevel(ctx.globalAlpha);
+				if (slotFrom && slotTo) {
+					if (lerpValue != 0)
+						renderMonthLevel(Math.min(lerpValue, ctx.globalAlpha));
+				}
+			} else if (zoomSmooth < 0) {
+				renderMonthLevel(ctx.globalAlpha);
+				if (slotFrom && slotTo) {
+					if (lerpValue != 0)
+						renderWeekLevel(Math.min(lerpValue, ctx.globalAlpha));
+				}
+			} else if (zoomSmooth >= 0) {
+				renderWeekLevel(ctx.globalAlpha);
 			}
 			ctx.globalAlpha = 1;
 			ctx.restore();
@@ -1642,6 +1840,12 @@ function paint(mouseCheck) {
 				closestDist = d;
 			}
 
+			if (mouseCheck.x > box.x && mouseCheck.x < box.x + box.width) {
+				if (mouseCheck.y > box.y && mouseCheck.y < box.y + box.height) {
+					clickableTarget = true;
+				}
+			}
+
 			if (zoomSmooth >= 0 && slot instanceof DaySlot) {
 				if (mouseCheck.x > box.x && mouseCheck.x < box.x + box.width) {
 					let log = getLogForDay(slot.date);
@@ -1657,6 +1861,7 @@ function paint(mouseCheck) {
 								if (log[i - 1] && log[i - 1].length > 3) {
 									resizeTarget = true;
 									resizeTime = log[i - 1][3];
+									snapMousePos = box.y + item[1] * box.height;
 								}
 								blockTarget = {
 									x: box.x,
@@ -1668,6 +1873,29 @@ function paint(mouseCheck) {
 
 							if (!resizeTarget && mouseCheck.x < box.x + 16) {
 								sliceTarget = true;
+							}
+
+							if (!resizeTarget && !sliceTarget) {
+								let localBlockTarget = {
+									x: box.x,
+									y: box.y + item[1] * box.height,
+									width: box.width,
+									height: (item[2] - item[1]) * box.height
+								};
+								let d = Math.sqrt(
+									(mouseCheck.x -
+										localBlockTarget.x -
+										localBlockTarget.width / 2) **
+										2 +
+										(mouseCheck.y -
+											localBlockTarget.y -
+											localBlockTarget.height / 2) **
+											2
+								);
+								if (d < 28 && log[i - 1]) {
+									typeTarget = true;
+									typeTime = log[i - 1][3];
+								}
 							}
 						}
 					}
@@ -1712,8 +1940,10 @@ function paint(mouseCheck) {
 			(mouseUseY - calendarYSmooth) /
 			((cnvsSize.y - 300) * calendarScaleSmooth);
 
-		if (currentMouseX < 200 || currentMouseX > cnvsSize.x - 200) {
-			mousePosDay = -1;
+		if (window.innerWidth > 900) {
+			if (currentMouseX < 200 || currentMouseX > cnvsSize.x - 200) {
+				mousePosDay = -1;
+			}
 		}
 
 		let mousePosDayScreen =
@@ -1786,37 +2016,70 @@ function paint(mouseCheck) {
 		// 	// ctx.stroke();
 		// 	console.log(i);
 		// }
+
+		if (snapMousePos != -1) {
+			if (boxTarget && window.innerWidth < 900) {
+				ctx.fillStyle = "white";
+				ctx.beginPath();
+				ctx.arc(
+					boxTarget.x + boxTarget.width / 2,
+					mouseUseY,
+					20,
+					0,
+					2 * Math.PI
+				);
+				ctx.fill();
+			}
+		}
 	}
 
 	if (mouseCheck) {
 		let mouseUseY = currentMouseY;
-		if (snapMousePos != -1) {
+		if (snapMousePos != -1 && !mouseCheck.noSnap) {
 			mouseUseY = snapMousePos;
+
+			if (blockTarget) {
+				let ox = blockTarget.x + blockTarget.width / 2;
+				let oy = mouseUseY;
+				let dx = mouseCheck.cx - ox;
+				let dy = mouseCheck.cy - oy;
+				let dist = Math.sqrt(dx * dx + dy * dy);
+				mobileResize = dist < 20;
+			}
 		}
 		let mousePosDay =
 			(mouseUseY - calendarYSmooth) /
 			((cnvsSize.y - 300) * calendarScaleSmooth);
 
-		if (currentMouseX < 200 || currentMouseX > cnvsSize.x - 200) {
-			mousePosDay = -1;
+		if (window.innerWidth < 900) {
+		} else {
+			if (currentMouseX < 200 || currentMouseX > cnvsSize.x - 200) {
+				mousePosDay = -1;
+			}
 		}
 
 		if (closestDay) {
-			ms = closestDay.getTime() + mousePosDay * 24 * 60 * 60 * 1000;
+			ms =
+				startOfDay(closestDay).getTime() +
+				mousePosDay * 24 * 60 * 60 * 1000;
 			if (mousePosDay < 0) {
-				ms = closestDay.getTime();
+				ms = startOfDay(closestDay).getTime();
 			}
 			if (mousePosDay > 1) {
-				ms = closestDay.getTime() + 24 * 60 * 60 * 1000;
+				ms = startOfDay(closestDay).getTime() + 24 * 60 * 60 * 1000;
 			}
 		}
 
 		return {
-			date: closestDay,
+			date: startOfDay(closestDay),
 			resize: resizeTarget,
 			slice: sliceTarget,
+			clickable: clickableTarget,
 			resizeTime,
-			ms
+			typeTarget,
+			typeTime,
+			ms,
+			mobileResize
 		};
 	}
 }
@@ -1854,6 +2117,16 @@ let currentMouseX = 0;
 let currentMouseY = 0;
 let calendarYDown = 0;
 
+let targetedAction = {
+	date: null,
+	resize: false,
+	resizeTime: 0,
+	slice: false,
+	targetMs: 0,
+	typeTarget: false,
+	typeTime: 0
+};
+
 onMounted(() => {
 	updateCanvasSize();
 
@@ -1861,6 +2134,12 @@ onMounted(() => {
 
 	let last = performance.now();
 	function runPaint() {
+		requestAnimationFrame(runPaint);
+
+		if (!tabActive.value) {
+			return;
+		}
+
 		let now = performance.now();
 		let dt = now - last;
 		last = now;
@@ -1903,7 +2182,17 @@ onMounted(() => {
 						1
 					);
 				} else if (zoomLevel.value == 0) {
-					targetedDate = focusDay.value = addWeeks(focusDay.value, 1);
+					if (window.innerWidth < 900) {
+						targetedDate = focusDay.value = addDays(
+							focusDay.value,
+							1
+						);
+					} else {
+						targetedDate = focusDay.value = addWeeks(
+							focusDay.value,
+							1
+						);
+					}
 				}
 				moveSlide.value = 0;
 				slideSmooth = 0;
@@ -1919,10 +2208,17 @@ onMounted(() => {
 						-1
 					);
 				} else if (zoomLevel.value == 0) {
-					targetedDate = focusDay.value = addWeeks(
-						focusDay.value,
-						-1
-					);
+					if (window.innerWidth < 900) {
+						targetedDate = focusDay.value = addDays(
+							focusDay.value,
+							-1
+						);
+					} else {
+						targetedDate = focusDay.value = addWeeks(
+							focusDay.value,
+							-1
+						);
+					}
 				}
 				moveSlide.value = 0;
 				slideSmooth = 0;
@@ -1930,7 +2226,6 @@ onMounted(() => {
 		}
 
 		paint();
-		requestAnimationFrame(runPaint);
 	}
 
 	setInterval(() => {
@@ -1987,59 +2282,78 @@ onMounted(() => {
 
 	runPaint();
 
-	let targetedAction = {
-		date: null,
-		resize: false,
-		resizeTime: 0,
-		slice: false,
-		targetMs: 0
-	};
-
 	let mouseMoved = false;
 
-	cnvs.value.addEventListener("touchstart", async e => {
-		mouseDown = true;
-		mouseMoved = false;
-		mouseDownX = e.touches[0].clientX;
-		mouseDownY = e.touches[0].clientY;
-		calendarYDown = calendarY.value;
-	});
+	let doubleTapTimer = 0;
+	let scaling = false;
 
-	cnvs.value.addEventListener("touchend", async e => {
-		mouseDown = false;
+	// cnvs.value.addEventListener("touchstart", async e => {
+	// 	mouseDown = true;
+	// 	mouseMoved = false;
+	// 	mouseDownX = e.touches[0].clientX;
+	// 	mouseDownY = e.touches[0].clientY;
+	// 	calendarYDown = calendarY.value;
+	// 	currentMouseX = mouseDownX;
+	// 	currentMouseY = mouseDownY;
+	// 	checkMousePosition(mouseDownX, mouseDownY);
+	// 	console.log(new Date(targetedAction.targetMs));
 
-		if (!mouseMoved) {
-			zoomLevel.value += 1;
-		}
-	});
+	// 	if (Date.now() - doubleTapTimer < 240) {
+	// 		executeSlice();
+	// 	} else {
+	// 		doubleTapTimer = Date.now();
+	// 	}
+	// });
 
-	cnvs.value.addEventListener("touchmove", async e => {
-		focusY = e.touches[0].clientY;
-		let dx = e.touches[0].clientX - mouseDownX;
-		let dy = e.touches[0].clientY - mouseDownY;
-		if (dx * dx + dy * dy > 5) {
-			mouseMoved = true;
-		}
-		currentMouseX = e.touches[0].clientX;
-		currentMouseY = e.touches[0].clientY;
+	// cnvs.value.addEventListener("touchend", async e => {
+	// 	mouseDown = false;
+	// 	snapSlide();
 
-		if (mouseDown && calendarScale.value > 1) {
-			calendarY.value = calendarYDown + dy;
-			// calendarYSmooth = calendarY.value;
-			return;
-		}
+	// 	// if (!mouseMoved) {
+	// 	// 	zoomLevel.value += 1;
+	// 	// }
+	// });
 
-		if (Math.abs(Math.floor(zoomLevel.value) - zoomLevel.value) > 0.01) {
-			return;
-		}
+	// cnvs.value.addEventListener("touchmove", async e => {
+	// 	if (scaling) {
+	// 		return;
+	// 	}
 
-		if (mouseDown) {
-			moveSlide.value =
-				-1 * Math.min(0.998, Math.max(-0.998, dx / (cnvsSize.x / 2)));
-		}
-	});
+	// 	focusY = e.touches[0].clientY;
+	// 	let dx = e.touches[0].clientX - mouseDownX;
+	// 	let dy = e.touches[0].clientY - mouseDownY;
+	// 	if (dx * dx + dy * dy > 5) {
+	// 		mouseMoved = true;
+	// 	}
+	// 	currentMouseX = e.touches[0].clientX;
+	// 	currentMouseY = e.touches[0].clientY;
 
+	// 	if (mouseDown && calendarScale.value > 1) {
+	// 		calendarY.value = calendarYDown + dy;
+	// 		calendarYSmooth = calendarY.value;
+	// 		return;
+	// 	}
+
+	// 	if (Math.abs(Math.floor(zoomLevel.value) - zoomLevel.value) > 0.01) {
+	// 		return;
+	// 	}
+
+	// 	if (mouseDown) {
+	// 		moveSlide.value =
+	// 			-1 * Math.min(0.998, Math.max(-0.998, dx / (cnvsSize.x / 2)));
+	// 	}
+	// });
+
+	async function executeSlice() {
+		let insertSliceAt = new Date(targetedAction.targetMs);
+		let blockAt = await getBlockAt(insertSliceAt);
+		writeLogEntry(insertSliceAt, blockAt);
+		console.log();
+	}
+	let grabbingDown = false;
 	cnvs.value.addEventListener("mousedown", async e => {
+		grabbingDown = true;
+
 		mouseDown = true;
 		mouseDownX = e.clientX;
 		mouseDownY = e.clientY;
@@ -2047,9 +2361,7 @@ onMounted(() => {
 		mouseMoved = false;
 
 		if (targetedAction.slice) {
-			let insertSliceAt = new Date(targetedAction.targetMs);
-			let blockAt = await getBlockAt(insertSliceAt);
-			writeLogEntry(insertSliceAt, blockAt);
+			executeSlice();
 		} else if (targetedAction.resize) {
 			let times = getNormalizedTimes(new Date(targetedAction.resizeTime));
 			mutation.fromChunk = times[0];
@@ -2060,43 +2372,34 @@ onMounted(() => {
 	});
 
 	document.addEventListener("mouseup", e => {
+		grabbingDown = false;
 		mouseDown = false;
-		snapSlide();
 
-		if (targetedAction.resize) {
-			let block = getBlockAtExact(mutation.fromChunk, mutation.fromKey);
-			writeLogEntry(
-				new Date(chunkAndKeyToMs(mutation.fromChunk, mutation.fromKey)),
-				deleteField()
-			);
-			if (mutation.toChunk) {
-				writeLogEntry(
-					new Date(chunkAndKeyToMs(mutation.toChunk, mutation.toKey)),
-					block
-				);
-			}
-
-			targetedAction.resize = false;
-			mutation.fromChunk = null;
-			mutation.fromKey = null;
-			mutation.toChunk = null;
-			mutation.toKey = null;
-		} else {
-			if (!mouseMoved) {
-				if (zoomLevel.value < 0) {
-					zoomLevel.value += 1;
-				}
-			}
-		}
+		if (scaling) return;
 	});
 
 	document.addEventListener("mouseleave", () => {
 		mouseDown = false;
+		grabbingDown = false;
 		snapSlide();
 	});
 
+	// cnvs.value.addEventListener("click", () => {
+	// 	zoomLevel.value += 1;
+	// 	clampZoom();
+	// });
+
 	function checkMousePosition(x, y) {
-		let { date, resize, slice, ms, resizeTime } = paint({
+		let {
+			date,
+			resize,
+			slice,
+			ms,
+			resizeTime,
+			clickable,
+			typeTarget,
+			typeTime
+		} = paint({
 			x,
 			y
 		});
@@ -2105,14 +2408,32 @@ onMounted(() => {
 		targetedAction.slice = slice;
 		targetedAction.date = date;
 		targetedAction.resizeTime = resizeTime;
+		targetedAction.typeTarget = typeTarget;
+		targetedAction.typeTime = typeTime;
 		targetedAction.targetMs = ms;
 
 		if (resize) {
 			cnvs.value.style.cursor = "ns-resize";
 		} else if (slice) {
 			cnvs.value.style.cursor = "pointer";
+		} else if (typeTarget) {
+			cnvs.value.style.cursor = "pointer";
+		} else if (clickable) {
+			if (zoomSmooth < 0) {
+				cnvs.value.style.cursor = "pointer";
+			} else {
+				if (swipeDown || grabbingDown) {
+					cnvs.value.style.cursor = "grabbing";
+				} else {
+					cnvs.value.style.cursor = "grab";
+				}
+			}
 		} else {
-			cnvs.value.style.cursor = "";
+			if (swipeDown || grabbingDown) {
+				cnvs.value.style.cursor = "grabbing";
+			} else {
+				cnvs.value.style.cursor = "grab";
+			}
 		}
 
 		if (!mouseDown) {
@@ -2135,81 +2456,311 @@ onMounted(() => {
 			checkMousePosition(e.clientX, e.clientY);
 		}
 
-		if (mouseDown && targetedAction.resize) {
-			let { ms } = paint({
-				x: e.clientX,
-				y: e.clientY
-			});
+		// if (mouseDown && calendarScale.value > 1) {
+		// 	calendarY.value = calendarYDown + dy;
+		// 	calendarYSmooth = calendarY.value;
+		// 	return;
+		// }
 
-			let bounds = getBlockBounds(new Date(targetedAction.resizeTime));
-			let minMs = chunkAndKeyToMs(bounds.min.chunk, bounds.min.key);
-			let maxMs = chunkAndKeyToMs(bounds.max.chunk, bounds.max.key);
+		// if (Math.abs(Math.floor(zoomLevel.value) - zoomLevel.value) > 0.01) {
+		// 	return;
+		// }
 
-			if (isNaN(minMs)) {
-				minMs = 0;
-			}
-
-			let times = getNormalizedTimes(
-				new Date(Math.min(maxMs, Math.max(minMs, ms)))
-			);
-
-			if (ms >= maxMs) {
-				mutation.toChunk = null;
-				mutation.toKey = null;
-			} else {
-				mutation.toChunk = times[0];
-				mutation.toKey = times[1];
-			}
-
-			return;
-		}
-
-		if (mouseDown && calendarScale.value > 1) {
-			calendarY.value = calendarYDown + dy;
-			calendarYSmooth = calendarY.value;
-			return;
-		}
-
-		if (Math.abs(Math.floor(zoomLevel.value) - zoomLevel.value) > 0.01) {
-			return;
-		}
-
-		if (mouseDown) {
-			moveSlide.value =
-				-1 * Math.min(0.998, Math.max(-0.998, dx / (cnvsSize.x / 2)));
-		}
+		// if (mouseDown) {
+		// 	moveSlide.value =
+		// 		-1 * Math.min(0.998, Math.max(-0.998, dx / (cnvsSize.x / 2)));
+		// }
 	});
 
 	centerCalendar();
 
-	document.addEventListener("gesturestart", function(e) {
-		e.preventDefault();
-		document.body.style.zoom = 0.99;
-	});
+	// document.addEventListener("gesturestart", function(e) {
+	// 	e.preventDefault();
+	// 	document.body.style.zoom = 0.99;
+	// });
 
-	document.addEventListener("gesturechange", function(e) {
-		e.preventDefault();
+	// document.addEventListener("gesturechange", function(e) {
+	// 	e.preventDefault();
 
-		document.body.style.zoom = 0.99;
-	});
-	document.addEventListener("gestureend", function(e) {
-		e.preventDefault();
-		document.body.style.zoom = 1;
-	});
+	// 	document.body.style.zoom = 0.99;
+	// });
+	// document.addEventListener("gestureend", function(e) {
+	// 	e.preventDefault();
+	// 	document.body.style.zoom = 1;
+	// });
+	let swipeDown = false;
+	let gestureDown = false;
+	interact(cnvs.value)
+		.styleCursor(false)
+		.on("tap", function(event) {
+			if (selectingType.value) {
+				selectingType.value = false;
+			}
 
-	interact(cnvs.value).gesturable({
-		listeners: {
-			start(event) {},
-			move(event) {
-				console.log(event);
-			},
-			end(event) {}
-		}
-	});
+			currentMouseX = event.clientX;
+			currentMouseY = event.clientY;
+			checkMousePosition(event.clientX, event.clientY);
+			if (targetedAction.typeTarget) {
+				nextTick(() => {
+					selectingType.value = true;
+					autoPos.value = {
+						x: currentMouseX,
+						y: currentMouseY + 10
+					};
+				});
+			}
+			setTimeout(() => {
+				console.log("tap zoom");
+				if (zoomLevel.value < 0) {
+					zoomLevel.value += 1;
+				}
+			}, 10);
+			event.preventDefault();
+		})
+		.gesturable({
+			styleCursor: false,
+			listeners: {
+				start(event) {
+					gestureDown = true;
+					scaling = true;
+					isScaling = true;
+					mouseDown = true;
+					mouseMoved = false;
+					mouseDownX = event.client.x;
+					mouseDownY = event.client.y;
+					calendarYDown = calendarY.value;
+					currentMouseX = mouseDownX;
+					currentMouseY = mouseDownY;
+					checkMousePosition(mouseDownX, mouseDownY);
+				},
+				move(event) {
+					// selectingType.value = false;
+					let delta = event.ds;
+					coolDown = 3;
+					currentMouseX = event.client.x;
+					currentMouseY = event.client.y;
+					checkMousePosition(currentMouseX, currentMouseY);
+
+					focusY = event.client.y;
+					let dx = event.client.x - mouseDownX;
+					let dy = event.client.y - mouseDownY;
+					if (dx * dx + dy * dy > 5) {
+						mouseMoved = true;
+					}
+
+					// if (calendarScale.value > 1) {
+					// 	calendarY.value = calendarYDown + dy;
+					// 	calendarYSmooth = calendarY.value;
+					// }
+
+					moveSlide.value =
+						-1 *
+						Math.min(
+							0.998,
+							Math.max(-0.998, dx / (cnvsSize.x / 2))
+						);
+
+					if (zoomLevel.value > 0) {
+						{
+							let py = event.client.y;
+							console.log(py);
+							let ty =
+								(py - calendarY.value) / calendarScale.value;
+
+							calendarScale.value -=
+								event.ds * -1 * calendarScale.value;
+							calendarScale.value = Math.min(
+								90,
+								Math.max(1, calendarScale.value)
+							);
+
+							calendarY.value = -ty * calendarScale.value + py;
+
+							if (calendarScale.value <= 1.001) {
+								zoomLevel.value = 0;
+							} else {
+								zoomLevel.value = 0.01;
+							}
+
+							centerCalendar();
+						}
+					} else {
+						calendarScale.value = 1;
+
+						zoomLevel.value += event.ds * 2;
+
+						centerCalendar();
+					}
+					clampZoom();
+				},
+				end(event) {
+					moveSlide.value = 0;
+					isScaling = false;
+					gestureDown = false;
+					scaling = false;
+					mouseDown = false;
+					snapSlide();
+				}
+			}
+		})
+		.draggable({
+			styleCursor: false,
+			listeners: {
+				start(event) {
+					// selectingType.value = false;
+					swipeDown = true;
+					checkMousePosition(currentMouseX, currentMouseY);
+
+					let { mobileResize } = paint({
+						x: currentMouseX,
+						y: currentMouseY,
+						cx: event.client.x,
+						cy: event.client.y
+					});
+
+					if (mobileResize) {
+						if (targetedAction.resize) {
+							grabbingDown = true;
+
+							mouseDown = true;
+							mouseDownX = event.client.x;
+							mouseDownY = event.client.x;
+							calendarYDown = calendarY.value;
+							mouseMoved = false;
+							let times = getNormalizedTimes(
+								new Date(targetedAction.resizeTime)
+							);
+							mutation.fromChunk = times[0];
+							mutation.fromKey = times[1];
+							mutation.toChunk = times[0];
+							mutation.toKey = times[1];
+						}
+					}
+				},
+				move(event) {
+					if (
+						mouseDown &&
+						!targetedAction.slice &&
+						targetedAction.resize
+					) {
+						currentMouseX = event.client.x;
+						currentMouseY = event.client.y;
+
+						let { ms } = paint({
+							x: event.client.x,
+							y: event.client.y,
+							noSnap: true
+						});
+						console.log(event.client.y, ms);
+
+						let bounds = getBlockBounds(
+							new Date(targetedAction.resizeTime)
+						);
+
+						let minMs = chunkAndKeyToMs(
+							bounds.min.chunk,
+							bounds.min.key
+						);
+						let maxMs = chunkAndKeyToMs(
+							bounds.max.chunk,
+							bounds.max.key
+						);
+
+						if (isNaN(minMs)) {
+							minMs = 0;
+						}
+
+						let times = getNormalizedTimes(
+							new Date(Math.min(maxMs, Math.max(minMs, ms)))
+						);
+
+						if (ms >= maxMs) {
+							mutation.toChunk = null;
+							mutation.toKey = null;
+						} else {
+							mutation.toChunk = times[0];
+							mutation.toKey = times[1];
+						}
+
+						return;
+					}
+
+					if (isScaling) {
+						return;
+					}
+					let dx = event.client.x - event.clientX0;
+					let dy = event.delta.y;
+
+					if (calendarScale.value > 1) {
+						calendarY.value += dy;
+						calendarYSmooth = calendarY.value;
+						return;
+					}
+
+					if (swipeDown && !gestureDown) {
+						moveSlide.value =
+							-1 *
+							Math.min(
+								0.998,
+								Math.max(-0.998, dx / (cnvsSize.x / 2))
+							);
+					} else {
+						moveSlide.value = 0;
+					}
+				},
+				end() {
+					mouseDown = false;
+
+					if (
+						targetedAction.resize &&
+						mutation.fromChunk &&
+						mutation.fromKey
+					) {
+						let block = getBlockAtExact(
+							mutation.fromChunk,
+							mutation.fromKey
+						);
+						writeLogEntry(
+							new Date(
+								chunkAndKeyToMs(
+									mutation.fromChunk,
+									mutation.fromKey
+								)
+							),
+							deleteField()
+						);
+						if (mutation.toChunk) {
+							writeLogEntry(
+								new Date(
+									chunkAndKeyToMs(
+										mutation.toChunk,
+										mutation.toKey
+									)
+								),
+								block
+							);
+						}
+
+						targetedAction.resize = false;
+						mutation.fromChunk = null;
+						mutation.fromKey = null;
+						mutation.toChunk = null;
+						mutation.toKey = null;
+					} else {
+					}
+					swipeDown = false;
+					snapSlide();
+				}
+			}
+		});
 
 	document.addEventListener(
 		"wheel",
 		e => {
+			if (e.target != cnvs.value) {
+				return;
+			}
+			selectingType.value = false;
 			e.preventDefault();
 			let delta = e.deltaY;
 			coolDown = 3;
@@ -2257,4 +2808,10 @@ onMounted(() => {
 
 <template>
 	<canvas ref="cnvs"></canvas>
+	<Dialog v-if="selectingType" :auto="autoPos">
+		<Selector
+			@update:modelValue="updateTargetType($event.id)"
+			:data="blocks"
+		></Selector>
+	</Dialog>
 </template>

@@ -39,6 +39,8 @@ import {
 } from "firebase/firestore";
 import { logEvent } from "firebase/analytics";
 
+import { formatTime, formatSeconds } from "../time.js";
+
 import { DoughnutChart, useDoughnutChart, BarChart } from "vue-chart-3";
 import { Chart, registerables } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
@@ -1548,13 +1550,6 @@ function initUser(useTemplate) {
 	}, 300);
 }
 
-function formatTime(t) {
-	let dec = t - Math.floor(t);
-	return `${Math.floor(t)}:${Math.round(dec * 60)
-		.toString()
-		.padStart(2, "0")}`;
-}
-
 function formatTimeClockMode(t) {
 	let dec = t - Math.floor(t);
 	let suffix = "";
@@ -1619,20 +1614,6 @@ document.addEventListener("mouseup", () => {
 	currentHolding.value = null;
 	isResizing.value = false;
 });
-
-function formatSeconds(s) {
-	if (s >= 60 * 60 * 24) {
-		return (s / (60 * 60 * 24)).toFixed(1) + "d";
-	} else if (s >= 60 * 60) {
-		return (
-			formatTime(s / (60 * 60)) + ":" + formatTime(s / 60).split(":")[1]
-		); //(s / (60 * 60)).toFixed(1) + "h"
-	} else if (s >= 60) {
-		return formatTime(s / 60); //Math.round((s / 60 * 10)) / 10 + "m"
-	} else {
-		return s + "s";
-	}
-}
 
 const calendarX = ref(0);
 const calendarY = ref(0);
@@ -2513,7 +2494,7 @@ const getMyDataChoice = ref(false);
 
 	<div class="get-data-modal modal" :class="{ open: getMyDataChoice }">
 		<div class="modal-content">
-			<h1 class="big-title">How would you like your data?</h1>
+			<h1 class="big-title">How do you like your data?</h1>
 			<div class="btn-bar">
 				<div class="big-btn" @click="getMyData('json')">
 					<i class="fas fa-code fa-3x"></i>
@@ -2649,7 +2630,15 @@ const getMyDataChoice = ref(false);
 			<div
 				class="tracking-clock"
 				:style="{
-					...computedTransforms[getBlockIndex(currentTracking.block)]
+					...computedTransforms[getBlockIndex(currentTracking.block)],
+					...{
+						'font-size':
+							(currentTimeUpdating - currentTracking.time) /
+								1000 >
+							60 * 60
+								? '14px'
+								: ''
+					}
 				}"
 			>
 				{{
@@ -2691,7 +2680,13 @@ const getMyDataChoice = ref(false);
 		}"
 		id="calendar-area"
 	>
-		<Log v-if="user" :blocks="blocks" :user="user" :db="db"></Log>
+		<Log
+			v-if="user"
+			:blocks="blocks"
+			:user="user"
+			:db="db"
+			:active="currentTab == 'calendar'"
+		></Log>
 		<!-- <div class="week">
 			<div class="week-box">
 				<i @click="prevWeek()" class="fas fa-chevron-left"></i>
