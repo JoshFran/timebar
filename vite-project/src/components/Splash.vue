@@ -6,11 +6,17 @@ import Grid from "../assets/splash/timebar-grid.svg?raw";
 import Activity from "../assets/splash/activity.svg?raw";
 
 import { formatSeconds } from "../time.js";
-import { onMounted } from "vue";
+import { onMounted, onUnmounted } from "vue";
+
+let timerInter = null;
+
+onUnmounted(() => {
+	if (timerInter) clearInterval(timerInter);
+});
 
 onMounted(() => {
 	let landed = Date.now();
-	setInterval(() => {
+	timerInter = setInterval(() => {
 		let s = 60 * 24 + Math.floor((Date.now() - landed) / 1000);
 		document.querySelector("#Timer").children[0].innerHTML = formatSeconds(
 			s
@@ -23,16 +29,18 @@ onMounted(() => {
 	<div class="splash-full">
 		<div class="splash-nav">
 			<div class="splash-logo" v-html="FullLogo"></div>
-			<button class="btn hide-mobile">Launch</button>
+			<router-link to="/app" class="btn hide-mobile">Launch</router-link>
 		</div>
 		<div class="splash-text">
 			<h1>The time tracker built for life</h1>
 			<p>
-				Timebar is the timer that never stops ticking. It stays out of
-				your way, and provides the flexibility to track everything from
-				broad activities, to detailed daily logs.
+				Timebar never stops ticking. It stays out of your way, and
+				provides the flexibility to track everything from broad
+				activities, to detailed daily logs.
 			</p>
-			<button class="btn hide-desktop">Launch App</button>
+			<router-link to="/app" class="btn hide-desktop"
+				>Launch App</router-link
+			>
 		</div>
 		<div class="splash-fade"></div>
 		<div class="splash-activity" v-html="Activity"></div>
@@ -84,8 +92,10 @@ onMounted(() => {
 				Timebar is completely free to use. Your data is yours and yours
 				only.
 			</p>
-			<button class="btn hide-mobile">Launch</button>
-			<button class="btn hide-desktop">Launch App</button>
+			<router-link to="/app" class="btn hide-mobile">Launch</router-link>
+			<router-link to="/app" class="btn hide-desktop"
+				>Launch App</router-link
+			>
 		</div>
 	</div>
 </template>
@@ -250,6 +260,7 @@ p {
 }
 
 .btn {
+	all: unset;
 	cursor: pointer;
 	border: none;
 	--color: #58c460;

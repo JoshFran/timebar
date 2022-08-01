@@ -6,7 +6,8 @@ import Splash from "./components/Splash.vue";
 <template>
 	<!-- <img alt="Timebar Logo" src="./assets/logo.svg" style="max-width: 100px;"/> -->
 	<!-- <HelloWorld msg="Timebar" /> -->
-	<Splash />
+	<!-- <Splash /> -->
+	<router-view></router-view>
 </template>
 
 <style>

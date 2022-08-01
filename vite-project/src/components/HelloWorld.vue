@@ -17,7 +17,7 @@ import {
 	endOfMonth,
 	startOfYear,
 	endOfYear,
-	subYears
+	subYears,
 } from "date-fns";
 
 import {
@@ -35,7 +35,7 @@ import {
 	arrayUnion,
 	deleteField,
 	query,
-	where
+	where,
 } from "firebase/firestore";
 import { logEvent } from "firebase/analytics";
 
@@ -62,8 +62,8 @@ import icons from "../icons";
 import { auth } from "firebaseui";
 
 const selectorIcons = computed(() => {
-	return Object.keys(icons).map(i => ({
-		name: i
+	return Object.keys(icons).map((i) => ({
+		name: i,
 	}));
 });
 
@@ -81,17 +81,17 @@ const blockSize = ref(200);
 const editing = ref("");
 
 const user = ref(null);
-const isInitialized = ref(false);
+const isInitialized = ref(true);
 const isProfileWatched = ref(false);
 
 const position = ref({
 	x: 0,
-	y: 0
+	y: 0,
 });
 
 const snappedPosition = ref({
 	x: 0,
-	y: 0
+	y: 0,
 });
 
 function trackEvent(name, d) {
@@ -102,7 +102,7 @@ let ignoreSnap = false;
 
 watch(
 	snappedPosition,
-	nv => {
+	(nv) => {
 		if (ignoreSnap) {
 			ignoreSnap = false;
 			return;
@@ -134,7 +134,7 @@ function getBlockDirections(b) {
 		[-1, 0],
 		[1, 0],
 		[0, -1],
-		[0, 1]
+		[0, 1],
 	];
 	for (let d of directions) {
 		let x = b.x + d[0];
@@ -145,7 +145,7 @@ function getBlockDirections(b) {
 				x: x,
 				y: y,
 				relx: d[0],
-				rely: d[1]
+				rely: d[1],
 			});
 		}
 	}
@@ -154,12 +154,12 @@ function getBlockDirections(b) {
 }
 
 const blockDirections = computed(() => {
-	return blocks.value.map(block => {
+	return blocks.value.map((block) => {
 		return getBlockDirections(block);
 	});
 });
 
-const addBlocks = computed(nv => {
+const addBlocks = computed((nv) => {
 	return [];
 	let adds = [];
 	let directions = [
@@ -170,7 +170,7 @@ const addBlocks = computed(nv => {
 		[0, -1],
 		[1, 1],
 		[0, 1],
-		[-1, 1]
+		[-1, 1],
 	];
 
 	for (let dir of directions) {
@@ -181,7 +181,7 @@ const addBlocks = computed(nv => {
 			adds.push({
 				id: key,
 				x: x,
-				y: y
+				y: y,
 			});
 		}
 	}
@@ -202,7 +202,7 @@ function generateBlocks(radius) {
 					x: i,
 					y: j,
 					name: `${i}-${j}`,
-					color: "#0000ee"
+					color: "#0000ee",
 				});
 		}
 	}
@@ -212,26 +212,26 @@ function generateBlocks(radius) {
 //blocks.value = generateBlocks(3)
 
 const computedTransforms = computed(() => {
-	return blocks.value.map(block => {
+	return blocks.value.map((block) => {
 		return getBlockTransform(block);
 	});
 });
 
 const computedAddTransforms = computed(() => {
-	return addBlocks.value.map(block => {
+	return addBlocks.value.map((block) => {
 		return getBlockTransform(block);
 	});
 });
 
 const container = ref({
 	width: window.innerWidth,
-	height: window.innerHeight
+	height: window.innerHeight,
 });
 
 window.onresize = () => {
 	container.value = {
 		width: window.innerWidth,
-		height: window.innerHeight
+		height: window.innerHeight,
 	};
 	centerCalendar();
 };
@@ -276,7 +276,7 @@ function updateRanges() {
 		{
 			name: "Today",
 			start: Math.max(getTime(startOfDay(new Date())), minTime),
-			end: Math.min(getTime(endOfDay(new Date())), maxTime)
+			end: Math.min(getTime(endOfDay(new Date())), maxTime),
 		},
 		{
 			name: "Yesterday",
@@ -284,12 +284,12 @@ function updateRanges() {
 				getTime(startOfDay(subDays(new Date(), 1))),
 				minTime
 			),
-			end: Math.min(getTime(endOfDay(subDays(new Date(), 1))), maxTime)
+			end: Math.min(getTime(endOfDay(subDays(new Date(), 1))), maxTime),
 		},
 		{
 			name: "This Week",
 			start: Math.max(getTime(startOfWeek(new Date())), minTime),
-			end: Math.min(getTime(endOfWeek(new Date())), maxTime)
+			end: Math.min(getTime(endOfWeek(new Date())), maxTime),
 		},
 		{
 			name: "Last Week",
@@ -297,12 +297,12 @@ function updateRanges() {
 				getTime(startOfWeek(subWeeks(new Date(), 1))),
 				minTime
 			),
-			end: Math.min(getTime(endOfWeek(subWeeks(new Date(), 1))), maxTime)
+			end: Math.min(getTime(endOfWeek(subWeeks(new Date(), 1))), maxTime),
 		},
 		{
 			name: "This Month",
 			start: Math.max(getTime(startOfMonth(new Date())), minTime),
-			end: Math.min(getTime(endOfMonth(new Date())), maxTime)
+			end: Math.min(getTime(endOfMonth(new Date())), maxTime),
 		},
 		{
 			name: "Last Month",
@@ -313,12 +313,12 @@ function updateRanges() {
 			end: Math.min(
 				getTime(endOfMonth(subMonths(new Date(), 1))),
 				maxTime
-			)
+			),
 		},
 		{
 			name: "This Year",
 			start: Math.max(getTime(startOfYear(new Date())), minTime),
-			end: Math.min(getTime(endOfYear(new Date())), maxTime)
+			end: Math.min(getTime(endOfYear(new Date())), maxTime),
 		},
 		{
 			name: "Last Year",
@@ -326,13 +326,13 @@ function updateRanges() {
 				getTime(startOfYear(subYears(new Date(), 1))),
 				minTime
 			),
-			end: Math.min(getTime(endOfYear(subYears(new Date(), 1))), maxTime)
+			end: Math.min(getTime(endOfYear(subYears(new Date(), 1))), maxTime),
 		},
 		{
 			name: "All Time",
 			start: Math.max(getTime(new Date(0)), minTime),
-			end: Math.min(getTime(new Date()), maxTime)
-		}
+			end: Math.min(getTime(new Date()), maxTime),
+		},
 	];
 }
 
@@ -442,8 +442,9 @@ function getBlockTransform(block) {
 	if (isZooming.value) {
 		shouldtrans = false;
 	}
-	let cube = `cubic-bezier(0.32, 0.86, .5, ${0.9 +
-		Math.min(distx / 1000, 0.1)})`;
+	let cube = `cubic-bezier(0.32, 0.86, .5, ${
+		0.9 + Math.min(distx / 1000, 0.1)
+	})`;
 	let trs = {
 		"data-x": x,
 		"data-y": y,
@@ -454,7 +455,7 @@ function getBlockTransform(block) {
 		transition:
 			enableTransition.value && shouldtrans
 				? `width ${dur}s ${cube}, height ${dur}s ${cube}, transform ${dur}s ${cube}`
-				: "none"
+				: "none",
 	};
 
 	oldTransforms[block.id] = trs;
@@ -472,14 +473,14 @@ function getBlockTransform(block) {
 	return trs;
 }
 
-document.addEventListener("keydown", e => {
+document.addEventListener("keydown", (e) => {
 	if (e.key == "Enter") {
 		if (!editing.value)
 			editBlock(getClosestBlock(position.value.x, position.value.y));
 	}
 });
 
-document.addEventListener("keyup", e => {
+document.addEventListener("keyup", (e) => {
 	// Arrow keys for position movement
 	if (currentTab.value != "tracking") return;
 	if (e.target.closest("input")) return;
@@ -584,7 +585,7 @@ function setSetting(name, value) {
 	let dRef = getProfRef();
 	enqueueDBAction(() => {
 		updateDoc(dRef, {
-			[["settings." + name]]: value
+			[["settings." + name]]: value,
 		});
 	});
 }
@@ -604,7 +605,7 @@ async function deleteBlock(block) {
 
 	let dRef = getProfRef();
 	await updateDoc(dRef, {
-		[["blocks." + block.id]]: deleteField()
+		[["blocks." + block.id]]: deleteField(),
 	});
 }
 
@@ -703,15 +704,16 @@ async function initChunk(first) {
 	let c = getCurrentChunk();
 	trackEvent("init_chunk", {
 		first: first,
-		time: c
+		time: c,
 	});
 	let cref = getChunkRef();
+	if (!cref) return;
 	let data = {
-		created: getNow()
+		created: getNow(),
 	};
 	if (first) {
 		data.log = {
-			[Math.floor(getNow() / 1000) - c]: "aa"
+			[Math.floor(getNow() / 1000) - c]: "aa",
 		};
 	} else {
 		// let latestTimerQuery = query(collection(db, "users", user.value.uid, "chunks"), orderBy("updated", "desc"), limit(1));
@@ -735,7 +737,7 @@ const userMenu = computed(() => {
 	} else {
 		let x = [
 			{ name: "Get My Data", icon: "download" },
-			{ name: "Logout", icon: "sign-out-alt" }
+			{ name: "Logout", icon: "sign-out-alt" },
 		];
 
 		if (user.value.isAnonymous)
@@ -743,7 +745,7 @@ const userMenu = computed(() => {
 
 		x.unshift({
 			name: user.value.displayName || "Anonymous",
-			icon: "user"
+			icon: "user",
 		});
 		return x;
 	}
@@ -762,15 +764,15 @@ function refreshConnection(u) {
 		}
 		const unsubscribe = onSnapshot(
 			doc(db, "users", user.value.uid),
-			snapshot => {
+			(snapshot) => {
 				isProfileWatched.value = true;
+				isInitialized.value = snapshot.exists();
 				let d = snapshot.data();
 
 				if (d) {
-					isInitialized.value = true;
 					console.log("Got new profile snapshot: ", d);
 					blocks.value = Object.keys(d.blocks).map(
-						id => d.blocks[id]
+						(id) => d.blocks[id]
 					);
 					profileData.value = d;
 				}
@@ -786,7 +788,7 @@ function refreshConnection(u) {
 
 		let justStarted = true;
 
-		const unsub2 = onSnapshot(latestQuery, snapshots => {
+		const unsub2 = onSnapshot(latestQuery, (snapshots) => {
 			let snapshot = snapshots.docs[0];
 			isProfileWatched.value = true;
 
@@ -874,7 +876,7 @@ function findMiddle() {
 	y /= blocks.value.length;
 	return {
 		x,
-		y
+		y,
 	};
 }
 
@@ -967,13 +969,13 @@ window.getChunks = async () => {
 	let chunksList = {};
 	(
 		await getDocs(query(collection(db, "users", user.value.uid, "chunks")))
-	).forEach(doc => {
+	).forEach((doc) => {
 		chunksList[doc.id] = doc.data();
 	});
 	return chunksList;
 };
 
-window.addEventListener("mousewheel", e => {
+window.addEventListener("mousewheel", (e) => {
 	if (currentTab.value == "tracking") {
 		scale.value -= e.deltaY / 1000;
 	} else {
@@ -999,13 +1001,13 @@ const calendarInfo = computed(() => {
 	if (window.innerWidth < 900) {
 		return {
 			week: getWeek(d),
-			day: getDay(new Date(selectedWeek.value.start))
+			day: getDay(new Date(selectedWeek.value.start)),
 		};
 	}
 
 	return {
 		week: getWeek(d),
-		day: getDay(d)
+		day: getDay(d),
 	};
 });
 
@@ -1044,8 +1046,8 @@ onMounted(() => {
 						centerCalendar();
 					}
 				},
-				end(event) {}
-			}
+				end(event) {},
+			},
 		})
 		.draggable({
 			//lockAxis: "start",
@@ -1080,8 +1082,8 @@ onMounted(() => {
 						isResizing.value = false;
 					}
 					calendarSwipeX.value = 0;
-				}
-			}
+				},
+			},
 		});
 
 	interact(rootEl.value)
@@ -1097,14 +1099,14 @@ onMounted(() => {
 				end(event) {
 					//scale.value += event.ds
 					isZooming.value = false;
-				}
-			}
+				},
+			},
 		})
 		.draggable({
 			inertia: {
 				endSpeed: 100,
 				enabled: false,
-				allowResume: false
+				allowResume: false,
 			},
 			listeners: {
 				start(event) {
@@ -1146,7 +1148,7 @@ onMounted(() => {
 								if (displaced.value) {
 									updateBlock(displaced.value, {
 										x: displacedPos.value.x,
-										y: displacedPos.value.y
+										y: displacedPos.value.y,
 									});
 									displaced.value = null;
 								}
@@ -1156,7 +1158,7 @@ onMounted(() => {
 								if (displaced.value.id != closest.id) {
 									updateBlock(displaced.value, {
 										x: displacedPos.value.x,
-										y: displacedPos.value.y
+										y: displacedPos.value.y,
 									});
 									displaced.value = null;
 								}
@@ -1169,14 +1171,14 @@ onMounted(() => {
 								displaced.value = closest;
 								displacedPos.value = {
 									x: displaced.value.x,
-									y: displaced.value.y
+									y: displaced.value.y,
 								};
 							}
 
 							if (displaced.value) {
 								updateBlock(displaced.value, {
 									x: startGridPosition.value.x,
-									y: startGridPosition.value.y
+									y: startGridPosition.value.y,
 								});
 							}
 						}
@@ -1190,10 +1192,10 @@ onMounted(() => {
 						updateGlobal();
 					}
 					//console.log(event.type, event.target)
-				}
-			}
+				},
+			},
 		})
-		.on("dragend", event => {
+		.on("dragend", (event) => {
 			if (gridMode.value) {
 				if (event.client.y < 90) {
 					if (currentHolding.value) {
@@ -1205,14 +1207,14 @@ onMounted(() => {
 				if (currentHolding.value) {
 					updateBlock(currentHolding.value, {
 						x: Math.round(currentHolding.value.x),
-						y: Math.round(currentHolding.value.y)
+						y: Math.round(currentHolding.value.y),
 					});
 				}
 
 				if (displaced.value) {
 					updateBlock(displaced.value, {
 						x: startGridPosition.value.x,
-						y: startGridPosition.value.y
+						y: startGridPosition.value.y,
 					});
 					displaced.value = null;
 				}
@@ -1234,7 +1236,7 @@ function getProfRef() {
 
 function keysIntoLinearLog(c) {
 	return Object.keys(c.log)
-		.map(key => [parseInt(key), c.log[key]])
+		.map((key) => [parseInt(key), c.log[key]])
 		.sort((a, b) => a[0] - b[0]);
 }
 
@@ -1255,12 +1257,12 @@ let latestTracking = computed(() => {
 	let cc = floorToChunk(getNow());
 	if (currentChunk.value && currentChunk.value.log) {
 		let x = Object.keys(currentChunk.value.log)
-			.map(a => parseInt(a))
+			.map((a) => parseInt(a))
 			.sort((a, b) => a - b);
 		if (x.length > 0) {
 			return [
 				cc * 1000 + x[x.length - 1] * 1000,
-				currentChunk.value.log[x[x.length - 1]]
+				currentChunk.value.log[x[x.length - 1]],
 			];
 		}
 	}
@@ -1270,7 +1272,7 @@ let latestTracking = computed(() => {
 });
 
 function getLogItemIndex(time) {
-	return linearLog.value.findIndex(item => item[0] == time);
+	return linearLog.value.findIndex((item) => item[0] == time);
 }
 
 function getCurrentChunk() {
@@ -1300,7 +1302,7 @@ const currentTracking = computed(() => {
 	let last = latestTracking.value;
 	return {
 		time: last[0],
-		block: last[1]
+		block: last[1],
 	};
 });
 
@@ -1309,7 +1311,7 @@ let trackingTimeout = null;
 function startTracking(block) {
 	console.log("started tracking", block);
 	trackEvent("start_tracking", {
-		name: block.name
+		name: block.name,
 	});
 
 	let cref = getChunkRef();
@@ -1337,7 +1339,7 @@ function startTracking(block) {
 		try {
 			await updateDoc(cref, {
 				updated: getNow(),
-				[["log." + t.toString()]]: block.id
+				[["log." + t.toString()]]: block.id,
 			});
 			console.log("Updated existing chunk");
 		} catch (e) {
@@ -1347,7 +1349,7 @@ function startTracking(block) {
 
 			await updateDoc(cref, {
 				updated: getNow(),
-				[["log." + t.toString()]]: block.id
+				[["log." + t.toString()]]: block.id,
 			});
 		}
 	}, 1000);
@@ -1355,7 +1357,7 @@ function startTracking(block) {
 
 function getChunkRef() {
 	let m = getCurrentChunk();
-	return doc(db, "users", user.value.uid, "chunks", m);
+	if (user.value) return doc(db, "users", user.value.uid, "chunks", m);
 }
 
 function getPrevChunkRef() {
@@ -1364,13 +1366,13 @@ function getPrevChunkRef() {
 }
 
 let templates = {
-	"58": {
+	58: {
 		x: -2,
 		id: "58",
 		color: "#2196f3",
 		y: 1,
 		icon: "youtube",
-		name: "youtube"
+		name: "youtube",
 	},
 	bq: {
 		y: 3,
@@ -1378,42 +1380,42 @@ let templates = {
 		id: "bq",
 		name: "diy",
 		icon: "hammer",
-		x: 0
+		x: 0,
 	},
 	dz: {
 		id: "dz",
 		y: -1,
 		color: "#673ab7",
 		name: "shower",
-		x: 2
+		x: 2,
 	},
 	zk: {
 		name: "email",
 		x: 0,
 		color: "#8bc34a",
 		id: "zk",
-		y: -3
+		y: -3,
 	},
 	oc: {
 		x: -1,
 		id: "oc",
 		color: "#8bc34a",
 		name: "admin",
-		y: -2
+		y: -2,
 	},
 	"8q": {
 		y: 2,
 		x: 0,
 		color: "#f44336",
 		id: "8q",
-		name: "cleaning"
+		name: "cleaning",
 	},
 	mo: {
 		color: "#673ab7",
 		name: "dishes",
 		y: 0,
 		x: 2,
-		id: "mo"
+		id: "mo",
 	},
 	rk: {
 		y: 0,
@@ -1421,28 +1423,28 @@ let templates = {
 		icon: "kitchen-set",
 		color: "#673ab7",
 		name: "cooking",
-		id: "rk"
+		id: "rk",
 	},
 	so: {
 		id: "so",
 		color: "#8bc34a",
 		x: 0,
 		name: "learning",
-		y: -2
+		y: -2,
 	},
 	ab: {
 		name: "internet",
 		id: "ab",
 		color: "#2196f3",
 		y: 0,
-		x: -2
+		x: -2,
 	},
 	fr: {
 		x: 1,
 		y: 0,
 		id: "fr",
 		name: "eating",
-		color: "#673ab7"
+		color: "#673ab7",
 	},
 	lh: {
 		id: "lh",
@@ -1450,28 +1452,28 @@ let templates = {
 		name: "driving",
 		x: 0,
 		y: 1,
-		icon: "car"
+		icon: "car",
 	},
 	zq: {
 		x: -1,
 		id: "zq",
 		y: 0,
 		name: "tv",
-		color: "#2196f3"
+		color: "#2196f3",
 	},
 	pd: {
 		id: "pd",
 		x: -1,
 		y: 2,
 		name: "groceries",
-		color: "#f44336"
+		color: "#f44336",
 	},
 	"0p": {
 		id: "0p",
 		y: -2,
 		color: "#8bc34a",
 		name: "meeting",
-		x: 1
+		x: 1,
 	},
 	"8r": {
 		y: -1,
@@ -1479,35 +1481,35 @@ let templates = {
 		name: "working",
 		color: "#8bc34a",
 		icon: "briefcase",
-		x: 0
+		x: 0,
 	},
 	gn: {
 		color: "#f44336",
 		name: "shopping",
 		x: 1,
 		y: 2,
-		id: "gn"
+		id: "gn",
 	},
 	aa: {
 		id: "aa",
 		name: "sleeping",
 		color: "#7a7a7a",
 		y: 0,
-		x: 0
+		x: 0,
 	},
 	zc: {
 		y: 0,
 		name: "gaming",
 		id: "zc",
 		color: "#2196f3",
-		x: -3
+		x: -3,
 	},
 	bi: {
 		color: "#673ab7",
 		x: 2,
 		id: "bi",
 		name: "brushing",
-		y: 1
+		y: 1,
 	},
 	hd: {
 		icon: "thumbs-up",
@@ -1515,8 +1517,8 @@ let templates = {
 		color: "#2196f3",
 		name: "social media",
 		x: -2,
-		id: "hd"
-	}
+		id: "hd",
+	},
 };
 
 function initUser(useTemplate) {
@@ -1535,10 +1537,10 @@ function initUser(useTemplate) {
 								x: 0,
 								y: 0,
 								name: "Internet",
-								color: "#2196f3"
-							}
+								color: "#2196f3",
+							},
 					  },
-				created: getNow()
+				created: getNow(),
 			},
 			{ merge: true }
 		);
@@ -1572,7 +1574,7 @@ function formatTimeClockMode(t) {
 
 function getNewId() {
 	let id = (Math.random() * 100000).toString(36).slice(-2);
-	while (blocks.value.find(b => b.id == id)) {
+	while (blocks.value.find((b) => b.id == id)) {
 		id = (Math.random() * 100000).toString(36).slice(-2);
 	}
 	return id;
@@ -1589,8 +1591,8 @@ async function addBlock(x, y) {
 			x: x,
 			y: y,
 			name: "Activity",
-			color: "#9c27b0"
-		}
+			color: "#9c27b0",
+		},
 	});
 	if (window.innerWidth < 900) {
 		position.value.x = x;
@@ -1690,7 +1692,7 @@ async function setKeyInChunk(time, key, value) {
 
 	enqueueDBAction(() => {
 		updateDoc(cRef, {
-			[[key]]: value
+			[[key]]: value,
 		});
 	});
 }
@@ -1706,7 +1708,7 @@ async function deleteKeyInChunk(time, key) {
 
 	enqueueDBAction(() => {
 		updateDoc(cRef, {
-			[[key]]: deleteField()
+			[[key]]: deleteField(),
 		});
 	});
 }
@@ -1717,13 +1719,13 @@ async function getLatestTimeLog(time) {
 	let rtime = time / 1000 - ctime;
 	if (c) {
 		let log = Object.keys(c.log)
-			.map(v => [parseInt(v), c.log[v]])
-			.filter(v => v[0] <= rtime)
+			.map((v) => [parseInt(v), c.log[v]])
+			.filter((v) => v[0] <= rtime)
 			.sort((a, b) => a[0] - b[0]);
 		if (log.length > 0) {
 			return {
 				log: log[log.length - 1],
-				chunk: ctime
+				chunk: ctime,
 			};
 		}
 	}
@@ -1733,13 +1735,13 @@ async function getLatestTimeLog(time) {
 	rtime = time / 1000 - ctime;
 	if (cBack) {
 		let log = Object.keys(cBack.log)
-			.map(v => [parseInt(v), cBack.log[v]])
-			.filter(v => v[0] <= rtime)
+			.map((v) => [parseInt(v), cBack.log[v]])
+			.filter((v) => v[0] <= rtime)
 			.sort((a, b) => a[0] - b[0]);
 		if (log.length > 0) {
 			return {
 				log: log[log.length - 1],
-				chunk: ctime
+				chunk: ctime,
 			};
 		}
 	}
@@ -1764,7 +1766,7 @@ async function getLogForDay(day) {
 			i += size;
 			a.push([
 				dayInSeconds - chunkStart + (i / n) * 60 * 60 * 24,
-				blocks.value[rng].id
+				blocks.value[rng].id,
 			]);
 		}
 		return a;
@@ -1772,9 +1774,9 @@ async function getLogForDay(day) {
 
 	if (chunk && chunk.log) {
 		let logs = Object.keys(chunk.log)
-			.map(v => [parseInt(v), chunk.log[v]])
+			.map((v) => [parseInt(v), chunk.log[v]])
 			.sort((a, b) => a[0] - b[0])
-			.filter(v => {
+			.filter((v) => {
 				let vi = v[0] + chunkStart;
 				if (vi >= dayInSeconds && vi < dayInSeconds + 60 * 60 * 24) {
 					return true;
@@ -1800,12 +1802,12 @@ async function getLogForDay(day) {
 						[dayInSeconds - chunkStart, lastActivity.log[1]],
 						[
 							dayInSeconds - chunkStart + 60 * 60 * 24,
-							lastActivity.log[1]
-						]
+							lastActivity.log[1],
+						],
 					];
 				} else {
 					return [
-						[dayInSeconds - chunkStart, lastActivity.log[1]]
+						[dayInSeconds - chunkStart, lastActivity.log[1]],
 						//[dayInSeconds - chunkStart + (getNow() - day) / 1000, lastActivity.log[1]]
 					];
 				}
@@ -1826,12 +1828,12 @@ const selectedWeek = computed(() => {
 	if (window.innerWidth <= 900) {
 		return {
 			start: startOfDay(time),
-			end: startOfDay(time)
+			end: startOfDay(time),
 		};
 	}
 	return {
 		start: startOfWeek(time),
-		end: endOfWeek(time)
+		end: endOfWeek(time),
 	};
 });
 
@@ -1875,7 +1877,7 @@ const weekList = computed(() => {
 		let t = subWeeks(d, i);
 		x.push({
 			time: t,
-			name: format(t, "dd MMMM yyyy")
+			name: format(t, "dd MMMM yyyy"),
 		});
 	}
 	return x;
@@ -1902,7 +1904,7 @@ watch(
 					if (dbefore.length > 0)
 						d.unshift([
 							startOfDayChunk,
-							dbefore[dbefore.length - 1][1]
+							dbefore[dbefore.length - 1][1],
 						]);
 				}
 			}
@@ -1921,8 +1923,8 @@ watch(
 					end: e - startOfDayChunk,
 					block: getBlockById(d[j][1]) || {
 						color: "white",
-						name: "Unknown"
-					}
+						name: "Unknown",
+					},
 				});
 			}
 
@@ -1951,15 +1953,15 @@ const weekTimeChunksInView = computed(() => {
 	ey *= dayInSeconds;
 
 	return chunks
-		.map(day =>
+		.map((day) =>
 			day.filter(
-				v =>
+				(v) =>
 					(sy < v.start && v.start < ey) ||
 					(sy < v.end && v.end < ey) ||
 					(v.start < sy && ey < v.end)
 			)
 		)
-		.map(day => (day.length > 50 ? day.slice(0, 50) : day));
+		.map((day) => (day.length > 50 ? day.slice(0, 50) : day));
 });
 
 const divisions = ref([
@@ -1968,7 +1970,7 @@ const divisions = ref([
 	[2, 24 * 2],
 	[3, 24 * 4],
 	[10, 24 * 6],
-	[15, 24 * 12]
+	[15, 24 * 12],
 ]);
 
 const currentDivision = computed(() => {
@@ -2006,7 +2008,7 @@ function download(filename, text) {
 	document.body.removeChild(element);
 }
 
-window.devImportData = function(json) {
+window.devImportData = function (json) {
 	updateDoc(doc(db, "users", user.value.uid), json.profile);
 	for (let chunk of Object.keys(json.chunks)) {
 		setDoc(
@@ -2016,7 +2018,7 @@ window.devImportData = function(json) {
 	}
 };
 
-window.downloadData = function() {
+window.downloadData = function () {
 	let d = {};
 
 	if (prevChunk.value) {
@@ -2030,7 +2032,7 @@ window.downloadData = function() {
 	download("data.json", JSON.stringify(d, null, "\t"));
 };
 
-window.downloadProfile = function() {
+window.downloadProfile = function () {
 	let d = profileData.value;
 
 	download("profile.json", JSON.stringify(d, null, "\t"));
@@ -2207,7 +2209,7 @@ watch(
 		let interval = 24 * 60 * 60 * 1000;
 		if (currentChartRange.value.name != "Today")
 			trackEvent("chart", {
-				name: currentChartRange.value.name
+				name: currentChartRange.value.name,
 			});
 
 		let rangeTime =
@@ -2237,11 +2239,9 @@ watch(
 		let closest = 0;
 		let closestDistance = 0;
 		let asc = (a, b) => a - b;
-		let pInt = a => parseInt(a);
+		let pInt = (a) => parseInt(a);
 
-		for (let key of Object.keys(chunks)
-			.map(pInt)
-			.sort(asc)) {
+		for (let key of Object.keys(chunks).map(pInt).sort(asc)) {
 			let chunkTime = key * 1000;
 			if (chunks[key].log)
 				for (let block of Object.keys(chunks[key].log)
@@ -2288,23 +2288,23 @@ watch(
 		}
 
 		let labels = Object.keys(times);
-		let labelsData = labels.map(l => {
+		let labelsData = labels.map((l) => {
 			if (l == "blank") {
 				return "blank";
 			}
-			let b = blocks.value.find(b => b.id == l);
+			let b = blocks.value.find((b) => b.id == l);
 			if (b) return b.name;
 			return "Unknown";
 		});
-		let colorData = labels.map(l => {
+		let colorData = labels.map((l) => {
 			if (l == "blank") {
 				return "#fff";
 			}
-			let b = blocks.value.find(b => b.id == l);
+			let b = blocks.value.find((b) => b.id == l);
 			if (b) return b.color;
 			return "#fff";
 		});
-		let numData = labels.map(l => times[l] / 1000);
+		let numData = labels.map((l) => times[l] / 1000);
 
 		testData.value = {
 			labels: labelsData,
@@ -2312,9 +2312,9 @@ watch(
 				{
 					labels: labelsData,
 					data: numData,
-					backgroundColor: colorData
-				}
-			]
+					backgroundColor: colorData,
+				},
+			],
 		};
 	},
 	{ deep: true }
@@ -2326,15 +2326,15 @@ const chartOptions = ref({
 	plugins: {
 		tooltip: {
 			callbacks: {
-				label: function(context) {
+				label: function (context) {
 					return (
 						" " +
 						context.label +
 						" " +
 						formatSeconds(context.dataset.data[context.dataIndex])
 					);
-				}
-			}
+				},
+			},
 		},
 		datalabels: {
 			color(context) {
@@ -2346,16 +2346,16 @@ const chartOptions = ref({
 			formatter: (value, context) => {
 				return context.dataset.labels[context.dataIndex];
 			},
-			display: "auto"
+			display: "auto",
 		},
 		legend: {
-			position: "top"
+			position: "top",
 		},
 		title: {
 			display: true,
-			text: "Activity Distribution"
-		}
-	}
+			text: "Activity Distribution",
+		},
+	},
 });
 
 const permLogin = ref(false);
@@ -2388,7 +2388,7 @@ function getMyData(format) {
 			await getDocs(
 				query(collection(db, "users", user.value.uid, "chunks"))
 			)
-		).forEach(doc => {
+		).forEach((doc) => {
 			chunksList[doc.id] = doc.data();
 		});
 
@@ -2401,23 +2401,23 @@ function getMyData(format) {
 			);
 		} else if (format == "csv") {
 			let rows = [
-				"start,end,activity,color,duration pretty,duration seconds"
+				"start,end,activity,color,duration pretty,duration seconds",
 			];
 			let timeLog = [];
 			let lastTime = 0;
 
 			for (let key of Object.keys(chunksList)
-				.map(k => parseInt(k))
+				.map((k) => parseInt(k))
 				.sort((a, b) => a - b)) {
 				let chunkTimeReal = key * 1000;
 				if (chunksList[key].log)
 					for (let block of Object.keys(chunksList[key].log)
-						.map(k => parseInt(k))
+						.map((k) => parseInt(k))
 						.sort((a, b) => a - b)) {
 						let time = chunkTimeReal + block * 1000;
 						let activity =
 							chunksList[key.toString()].log[block.toString()];
-						let b = blocks.value.find(b => b.id == activity);
+						let b = blocks.value.find((b) => b.id == activity);
 						if (b) {
 							let color = b.color;
 							let name = b.name;
@@ -2427,14 +2427,14 @@ function getMyData(format) {
 								start: time,
 								activity: activity,
 								color: color,
-								name: name
+								name: name,
 							});
 						}
 					}
 			}
 
 			timeLog.push({
-				start: getNow()
+				start: getNow(),
 			});
 
 			if (timeLog.length > 0)
@@ -2449,9 +2449,9 @@ function getMyData(format) {
 						""
 					);
 					rows.push(
-						`${start.toISOString()},${end.toISOString()},${name},${color},${duration},${(end -
-							start) /
-							1000}`
+						`${start.toISOString()},${end.toISOString()},${name},${color},${duration},${
+							(end - start) / 1000
+						}`
 					);
 				}
 
@@ -2553,12 +2553,12 @@ const getMyDataChoice = ref(false);
 					editing: block.id == editing,
 					active:
 						block.x == snappedPosition.x &&
-						block.y == snappedPosition.y
+						block.y == snappedPosition.y,
 				}"
 				:style="{
 					'--color': block.color,
 					'--contrast': invert(block.color, true),
-					...computedTransforms[i]
+					...computedTransforms[i],
 				}"
 				:data-block="block.id"
 				@contextmenu="$event.preventDefault()"
@@ -2609,7 +2609,7 @@ const getMyDataChoice = ref(false);
 					id="focus-input"
 					@keypress.enter="editing = ''"
 					class="block-text"
-					style="pointer-events: all;"
+					style="pointer-events: all"
 					v-model="block.name"
 					@change="updateBlock(block, { name: block.name })"
 				/>
@@ -2637,16 +2637,23 @@ const getMyDataChoice = ref(false);
 								1000 >
 							60 * 60
 								? '14px'
-								: ''
-					}
+								: '',
+					},
 				}"
 			>
 				{{
-					formatSeconds(
-						Math.floor(
-							(currentTimeUpdating - currentTracking.time) / 1000
-						)
-					)
+					currentTracking.time
+						? formatSeconds(
+								Math.floor(
+									Math.max(
+										0,
+										(currentTimeUpdating -
+											currentTracking.time) /
+											1000
+									)
+								)
+						  )
+						: "0s"
 				}}
 			</div>
 		</template>
@@ -2657,7 +2664,7 @@ const getMyDataChoice = ref(false);
 				:style="{
 					'--color': '#f5f5f5',
 					'--contrast': 'black',
-					...computedAddTransforms[i]
+					...computedAddTransforms[i],
 				}"
 			>
 				<div
@@ -2676,7 +2683,7 @@ const getMyDataChoice = ref(false);
 		:style="{ '--calendar-direction': calendarAnimatingTo }"
 		:class="{
 			'calendar-animating': calendarAnimating,
-			active: currentTab == 'calendar'
+			active: currentTab == 'calendar',
 		}"
 		id="calendar-area"
 	>
