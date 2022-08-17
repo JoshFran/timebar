@@ -15,6 +15,6 @@ export function formatSeconds(s) {
 	} else if (s >= 60) {
 		return formatTime(s / 60); //Math.round((s / 60 * 10)) / 10 + "m"
 	} else {
-		return s + "s";
+		return Math.floor(s) + "s";
 	}
 }

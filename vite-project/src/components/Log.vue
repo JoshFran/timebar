@@ -227,18 +227,20 @@ function getBlockBounds(date) {
 	}
 
 	let chunkMs = parseInt(cid) * 1000;
-	for (let k of Object.keys(chunkData.log)) {
-		let ms = chunkMs + parseInt(k) * 1000;
-		if (ms < targetMs) {
-			min.chunk = cid;
-			min.key = k;
-		} else if (ms > targetMs) {
-			max.chunk = cid;
-			max.key = k;
-			break;
-		} else {
-			mid.chunk = cid;
-			mid.key = k;
+	if (chunkData.log) {
+		for (let k of Object.keys(chunkData.log)) {
+			let ms = chunkMs + parseInt(k) * 1000;
+			if (ms < targetMs) {
+				min.chunk = cid;
+				min.key = k;
+			} else if (ms > targetMs) {
+				max.chunk = cid;
+				max.key = k;
+				break;
+			} else {
+				mid.chunk = cid;
+				mid.key = k;
+			}
 		}
 	}
 
@@ -313,7 +315,7 @@ async function getBlockAt(date) {
 }
 
 async function updateTargetType(toBlockId) {
-	let time = new Date(targetedAction.typeTime);
+	let time = new Date(targetedAction.cachedTypeTime);
 	writeLogEntry(time, toBlockId);
 }
 
@@ -480,7 +482,10 @@ function getLogForDay(date) {
 			// }
 		}
 
-		if (now > dayEnd) {
+		if (
+			now > dayEnd ||
+			(now > dayStart && now > chunkMs && chunkKey != chunkAfterKey)
+		) {
 			if (chunkAfter) {
 				// console.log("chunkAfter", chunkAfter);
 				let readAfterLog = chunkAfter.log;
@@ -519,8 +524,20 @@ function getLogForDay(date) {
 						currentBlock = readAfterLog[k];
 					}
 				}
+
+				if (now > chunkMs && chunkKey != chunkAfterKey) {
+					log.push([
+						currentBlock,
+						start / totalMs,
+						(now - dayStart) / totalMs,
+					]);
+				}
 			} else {
-				log.push([currentBlock, start / totalMs, 1]);
+				log.push([
+					currentBlock,
+					start / totalMs,
+					Math.min((now - dayStart) / totalMs, 1),
+				]);
 			}
 		} else {
 			log.push([
@@ -2552,6 +2569,7 @@ onMounted(() => {
 			if (targetedAction.typeTarget) {
 				nextTick(() => {
 					selectingType.value = true;
+					targetedAction.cachedTypeTime = targetedAction.typeTime;
 					autoPos.value = {
 						x: currentMouseX,
 						y: currentMouseY + 10,
