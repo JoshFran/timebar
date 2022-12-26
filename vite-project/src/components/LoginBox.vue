@@ -43,7 +43,7 @@ onUnmounted(() => {
 onMounted(async () => {
 	setTimeout(() => {
 		timeoutExpired.value = true;
-	}, 4000);
+	}, 400);
 	const blob = new Blob([loaderRiv], { type: "text/plain; charset=utf-8" });
 
 	let buffer = await blob.arrayBuffer();
@@ -61,7 +61,7 @@ onMounted(async () => {
 				r.stop();
 				if (cb) cb();
 				timer = null;
-			}, 1500);
+			}, 800);
 		},
 	});
 

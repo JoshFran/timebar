@@ -62,6 +62,7 @@ import {
 	isSameMonth,
 	addDays,
 	getDaysInMonth,
+	getYear,
 } from "date-fns";
 
 import { formatTime, formatSeconds } from "../time.js";
@@ -93,6 +94,27 @@ let blocks = computed(() => {
 		return res;
 	}, {});
 	return Object.values(result).flat();
+});
+
+let selectorList = computed(() => {
+	selectingType.value;
+	let b = blocks.value.filter((b) => b.name != "(deleted)");
+	let t = getTargetType();
+	let block = blocks.value.find((b) => b.id == t);
+	console.log(b);
+	console.log(block, t);
+	if (block.name == "(deleted)") {
+		return [
+			{
+				id: "<restore>",
+				name: "Restore",
+				icon: "trash-restore",
+			},
+			...b,
+		];
+	} else {
+		return b;
+	}
 });
 
 let chunks = {};
@@ -279,7 +301,7 @@ function getBlockBounds(date) {
 	return { min, mid, max };
 }
 
-async function getBlockAt(date) {
+function getBlockAt(date) {
 	let cid = dateToChunkId(date);
 	let chunkData = getOrEnqueueChunkData(cid);
 
@@ -314,9 +336,19 @@ async function getBlockAt(date) {
 	return block;
 }
 
+const emit = defineEmits(["restore"]);
 async function updateTargetType(toBlockId) {
+	if (toBlockId == "<restore>") {
+		let ttype = getTargetType();
+		emit("restore", ttype);
+		return;
+	}
 	let time = new Date(targetedAction.cachedTypeTime);
 	writeLogEntry(time, toBlockId);
+}
+function getTargetType() {
+	let time = new Date(targetedAction.cachedTypeTime);
+	return getBlockAt(time);
 }
 
 function writeLogEntry(date, block) {
@@ -733,6 +765,8 @@ class MonthLayout extends ViewLayout {
 		this.rows = 6;
 		this.columns = 7;
 
+		this.slots.push(new TextSlot(monthsOfTheYear[getMonth(this.month)]));
+
 		let days = eachDayOfInterval({
 			start: startOfWeek(startOfMonth(this.month)),
 			end: endOfWeek(endOfMonth(this.month)),
@@ -752,9 +786,9 @@ class MonthLayout extends ViewLayout {
 	}
 
 	getTransform(slotIndex) {
-		let isText = slotIndex <= 6;
-		if (slotIndex > 6) {
-			slotIndex = slotIndex - 7;
+		let isText = slotIndex <= 7;
+		if (slotIndex > 7) {
+			slotIndex = slotIndex - 8;
 		}
 		let sideMargin = 400;
 
@@ -770,18 +804,29 @@ class MonthLayout extends ViewLayout {
 			(Math.min(cnvsSize.x - sideMargin) - this.columns * margin) /
 			this.columns;
 		let rowHeight =
-			(Math.min(cnvsSize.y - 200) - this.rows * margin) / this.rows;
+			(Math.min(cnvsSize.y - 300) - this.rows * margin) / this.rows;
 		let row = Math.floor(slotIndex / this.columns);
 		let column = slotIndex % this.columns;
 
 		if (isText) {
-			return {
-				x: column * (rowWidth + margin),
-				y: -60,
-				width: rowWidth,
-				height: 40,
-				radii: 10,
-			};
+			column = (slotIndex - 1) % this.columns;
+			if (slotIndex == 0) {
+				return {
+					x: 3 * (rowWidth + margin),
+					y: -120,
+					width: rowWidth,
+					height: 40,
+					radii: 10,
+				};
+			} else {
+				return {
+					x: column * (rowWidth + margin),
+					y: -60,
+					width: rowWidth,
+					height: 40,
+					radii: 10,
+				};
+			}
 		} else {
 			return {
 				x: column * (rowWidth + margin),
@@ -803,6 +848,7 @@ class YearLayout extends ViewLayout {
 	render() {
 		this.rows = 4 * 7; // 4 months * 7 days
 		this.columns = 3 * 6; // 3 months * 6 days
+		this.slots.push(new TextSlot(new Date(this.year).getFullYear()));
 
 		for (let i = 0; i < 12; i++) {
 			this.slots.push(new TextSlot(monthsOfTheYear[i]));
@@ -831,6 +877,18 @@ class YearLayout extends ViewLayout {
 		}
 		if (window.innerWidth < 485) {
 			psize = 15;
+		}
+
+		if (slotIndex == 0) {
+			return {
+				x: 1.5 * psize * 7 + 1.5 * psize,
+				y: -100,
+				width: 7 * psize,
+				height: psize,
+				radii: 30,
+			};
+		} else {
+			slotIndex -= 1;
 		}
 
 		let isText = slotIndex <= 11;
@@ -866,7 +924,7 @@ class YearLayout extends ViewLayout {
 				radii: 30,
 			};
 		} else {
-			let slot = this.slots[12 + slotIndex];
+			let slot = this.slots[13 + slotIndex];
 			let month = getMonth(slot.date);
 			let dayOfWeek = getDay(slot.date);
 			let weekOfMonth = getWeekOfMonth(slot.date);
@@ -1958,7 +2016,14 @@ function paint(mouseCheck) {
 											localBlockTarget.height / 2) **
 											2
 								);
-								if (d < 28 && log[i - 1]) {
+								if (
+									mouseCheck.y >= localBlockTarget.y &&
+									mouseCheck.y <=
+										localBlockTarget.y +
+											localBlockTarget.height &&
+									d < 28 &&
+									log[i - 1]
+								) {
 									typeTarget = true;
 									typeTime = log[i - 1][3];
 								}
@@ -2878,7 +2943,7 @@ onMounted(() => {
 	<Dialog v-if="selectingType" :auto="autoPos">
 		<Selector
 			@update:modelValue="updateTargetType($event.id)"
-			:data="blocks"
+			:data="selectorList"
 		></Selector>
 	</Dialog>
 </template>

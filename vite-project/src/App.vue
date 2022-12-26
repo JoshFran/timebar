@@ -19,4 +19,9 @@ import Splash from "./components/Splash.vue";
 	color: #2c3e50;
 	margin: 0px;
 }
+
+html,
+body {
+	height: 100%;
+}
 </style>

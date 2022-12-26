@@ -6,14 +6,14 @@ import {
 	ref,
 	defineEmits,
 	Teleport,
-	nextTick
+	nextTick,
 } from "vue";
 
 const props = defineProps({
 	auto: {
 		type: Object,
-		default: () => ({})
-	}
+		default: () => ({}),
+	},
 });
 
 const open = ref(false);
@@ -23,7 +23,7 @@ const root = ref(null);
 
 const position = ref({
 	top: 0,
-	left: 0
+	left: 0,
 });
 
 const snapTo = ref(false);
@@ -35,19 +35,19 @@ function openDialog(overridePos) {
 
 	position.value = {
 		top: rect.top + rect.height,
-		left: rect.left + rect.width / 2
+		left: rect.left + rect.width / 2,
 	};
 
 	if (overridePos) {
 		position.value = {
 			left: overridePos.x,
-			top: overridePos.y
+			top: overridePos.y,
 		};
 		rect = {
 			left: overridePos.x,
 			top: overridePos.y,
 			width: 0,
-			height: 0
+			height: 0,
 		};
 	}
 
@@ -77,7 +77,7 @@ onMounted(() => {
 	}
 });
 
-document.addEventListener("click", e => {
+document.addEventListener("click", (e) => {
 	if (
 		open.value &&
 		!root.value.parentElement.contains(e.target) &&
@@ -89,7 +89,7 @@ document.addEventListener("click", e => {
 	}
 });
 
-document.addEventListener("mousewheel", e => {
+document.addEventListener("mousewheel", (e) => {
 	if (open.value && !e.target.closest(".dialog-box-inner")) {
 		closeDialog();
 	}
@@ -116,7 +116,7 @@ function closeDialog() {
 				:class="{ closing: animateClose, 'bottom-snap': snapTo }"
 				:style="{
 					'--left': position.left + 'px',
-					'--top': position.top + 'px'
+					'--top': position.top + 'px',
 				}"
 				class="dialog-box-inner"
 			>
@@ -130,7 +130,7 @@ function closeDialog() {
 @media (max-width: 900px) {
 	.dialog-box-inner {
 		width: 100vw !important;
-		height: 100vh !important;
+		height: 100% !important;
 		left: 0vw !important;
 		top: 0vh !important;
 		bottom: unset !important;

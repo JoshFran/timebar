@@ -5,7 +5,7 @@ import {
 	onMounted,
 	ref,
 	defineEmits,
-	Teleport
+	Teleport,
 } from "vue";
 import invert from "invert-color";
 import Icon from "./Icon.vue";
@@ -15,7 +15,7 @@ const query = ref("");
 const { modelValue, data, hideSearch } = defineProps({
 	modelValue: [String, Object],
 	data: Array,
-	hideSearch: Boolean
+	hideSearch: Boolean,
 });
 const emit = defineEmits(["update:modelValue"]);
 
@@ -23,7 +23,7 @@ const inp = ref(null);
 
 const filtered = computed(() => {
 	return data
-		.filter(item => {
+		.filter((item) => {
 			if (!query.value) return true;
 
 			if (typeof item == "string") {
@@ -41,7 +41,7 @@ const root = ref(null);
 
 function selectVal(item) {
 	let event = new Event("closedialog", {
-		bubbles: true
+		bubbles: true,
 	});
 	root.value.dispatchEvent(event);
 	emit("update:modelValue", item);
@@ -75,6 +75,7 @@ onMounted(() => {
 			type="text"
 			placeholder="Search"
 			v-model="query"
+			@input="(e) => (query = e.target.value)"
 		/>
 		<template v-for="item in filtered">
 			<div @click="selectVal(item)">
@@ -86,7 +87,7 @@ onMounted(() => {
 							'--color': item.color ? item.color : 'white',
 							'--contrast': item.color
 								? invert(item.color, true)
-								: 'black'
+								: 'black',
 						}"
 					>
 						{{ typeof item == "string" ? item : item.name }}

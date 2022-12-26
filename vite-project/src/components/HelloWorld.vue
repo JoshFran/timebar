@@ -605,7 +605,21 @@ async function deleteBlock(block) {
 
 	let dRef = getProfRef();
 	await updateDoc(dRef, {
-		[["blocks." + block.id]]: deleteField(),
+		[["blocks." + block.id + ".name"]]: "(deleted)",
+		[["blocks." + block.id + ".color"]]: "#232323",
+		[["blocks." + block.id + ".icon"]]: "times",
+	});
+	// await updateDoc(dRef, {
+	// 	[["blocks." + block.id]]: deleteField(),
+	// });
+}
+
+async function restoreBlock(blockId) {
+	let dRef = getProfRef();
+	await updateDoc(dRef, {
+		[["blocks." + blockId + ".name"]]: "Untitled",
+		[["blocks." + blockId + ".color"]]: "#77bbff",
+		[["blocks." + blockId + ".icon"]]: "",
 	});
 }
 
@@ -995,6 +1009,18 @@ window.addEventListener("mousewheel", (e) => {
 	}
 });
 
+const isOnline = ref(navigator.onLine);
+
+function checkOnLineStatus() {
+	isOnline.value = navigator.onLine;
+	if (isOnline.value) {
+		refreshConnection(user.value);
+	}
+}
+
+window.addEventListener("online", () => checkOnLineStatus());
+window.addEventListener("offline", () => checkOnLineStatus());
+
 const calendarInfo = computed(() => {
 	let d = new Date();
 
@@ -1030,6 +1056,7 @@ onMounted(() => {
 			listeners: {
 				start(event) {},
 				move(event) {
+					if (isOnline.value == false) return;
 					//calendarScale.value += event.ds
 					let py = event.client.y;
 					let ty = (py - calendarY.value) / calendarScale.value;
@@ -1056,6 +1083,7 @@ onMounted(() => {
 					calendarDragging.value = true;
 				},
 				move(event) {
+					if (isOnline.value == false) return;
 					if (isResizing.value) {
 						setResizeTarget(event.client.y);
 						return;
@@ -2492,6 +2520,19 @@ const getMyDataChoice = ref(false);
 		</div>
 	</div>
 
+	<div class="offline-modal modal modal-banner" :class="{ open: !isOnline }">
+		<div class="modal-content">
+			<h1 class="big-title">You're offline</h1>
+			<p>
+				You're currently offline. Please connect to the internet to
+				access your data.
+			</p>
+			<p style="margin: 0">
+				<i>Refresh if this dialog doesn't go away.</i>
+			</p>
+		</div>
+	</div>
+
 	<div class="get-data-modal modal" :class="{ open: getMyDataChoice }">
 		<div class="modal-content">
 			<h1 class="big-title">How do you like your data?</h1>
@@ -2545,86 +2586,93 @@ const getMyDataChoice = ref(false);
 			</div>
 		</div>
 	</div>
-	<div class="block-wrap" :class="{ 'grid-mode': gridMode }" ref="rootEl">
+	<div
+		class="block-wrap"
+		:class="{ 'grid-mode': gridMode, 'is-offline': !isOnline }"
+		ref="rootEl"
+	>
 		<template v-for="(block, i) in blocks" :key="block.id">
-			<div
-				class="block"
-				:class="{
-					editing: block.id == editing,
-					active:
-						block.x == snappedPosition.x &&
-						block.y == snappedPosition.y,
-				}"
-				:style="{
-					'--color': block.color,
-					'--contrast': invert(block.color, true),
-					...computedTransforms[i],
-				}"
-				:data-block="block.id"
-				@contextmenu="$event.preventDefault()"
-			>
-				<template v-for="(dir, j) in blockDirections[i]">
-					<div
-						class="add-block-direction"
-						@click="addBlock(dir.x, dir.y)"
-						:style="{ '--x': dir.relx, '--y': dir.rely }"
-					>
-						<i class="fas fa-add"></i>
-					</div>
-				</template>
-
+			<template v-if="block.name != '(deleted)'">
 				<div
-					v-if="editing == block.id"
-					@click="editing = ''"
-					class="bad-btn"
+					class="block"
+					:class="{
+						editing: block.id == editing,
+						active:
+							block.x == snappedPosition.x &&
+							block.y == snappedPosition.y,
+					}"
+					:style="{
+						'--color': block.color,
+						'--contrast': invert(block.color, true),
+						...computedTransforms[i],
+					}"
+					:data-block="block.id"
+					@contextmenu="$event.preventDefault()"
 				>
-					<i class="fas fa-times"></i>
-				</div>
-				<div
-					@click="selectBlock(block)"
-					@mousedown="startHold(block, true)"
-					@touchstart="startHold(block)"
-					@touchend="endHold()"
-					class="block-background"
-				></div>
+					<template v-for="(dir, j) in blockDirections[i]">
+						<div
+							class="add-block-direction"
+							@click="addBlock(dir.x, dir.y)"
+							:style="{ '--x': dir.relx, '--y': dir.rely }"
+						>
+							<i class="fas fa-add"></i>
+						</div>
+					</template>
 
-				<div class="block-icon">
-					<Icon :icon="block.icon || block.name">
-						<Dialog v-if="editing">
-							<Selector
-								@update:modelValue="
-									(block.icon = $event.name),
-										updateBlock(block, { icon: block.icon })
-								"
-								:data="selectorIcons"
-							></Selector>
-						</Dialog>
-					</Icon>
-				</div>
-				<div v-if="block.id != editing" class="block-text">
-					{{ block.name }}
-				</div>
-				<input
-					v-else
-					id="focus-input"
-					@keypress.enter="editing = ''"
-					class="block-text"
-					style="pointer-events: all"
-					v-model="block.name"
-					@change="updateBlock(block, { name: block.name })"
-				/>
-				<Color
-					class="block-color-box"
-					v-model="block.color"
-					@update:modelValue="
-						updateBlock(block, { color: block.color })
-					"
-				></Color>
-				<div @click="editBlock(block)" class="block-edit-btn">
-					<i class="fas fa-edit"></i>
-				</div>
-			</div>
-		</template>
+					<div
+						v-if="editing == block.id"
+						@click="editing = ''"
+						class="bad-btn"
+					>
+						<i class="fas fa-times"></i>
+					</div>
+					<div
+						@click="selectBlock(block)"
+						@mousedown="startHold(block, true)"
+						@touchstart="startHold(block)"
+						@touchend="endHold()"
+						class="block-background"
+					></div>
+
+					<div class="block-icon">
+						<Icon :icon="block.icon || block.name">
+							<Dialog v-if="editing">
+								<Selector
+									@update:modelValue="
+										(block.icon = $event.name),
+											updateBlock(block, {
+												icon: block.icon,
+											})
+									"
+									:data="selectorIcons"
+								></Selector>
+							</Dialog>
+						</Icon>
+					</div>
+					<div v-if="block.id != editing" class="block-text">
+						{{ block.name }}
+					</div>
+					<input
+						v-else
+						id="focus-input"
+						@keypress.enter="editing = ''"
+						class="block-text"
+						style="pointer-events: all"
+						v-model="block.name"
+						@change="updateBlock(block, { name: block.name })"
+					/>
+					<Color
+						class="block-color-box"
+						v-model="block.color"
+						@update:modelValue="
+							updateBlock(block, { color: block.color })
+						"
+					></Color>
+					<div @click="editBlock(block)" class="block-edit-btn">
+						<i class="fas fa-edit"></i>
+					</div>
+				</div> </template
+		></template>
 
 		<template v-if="currentTracking !== null && !gridMode">
 			<div
@@ -2693,6 +2741,7 @@ const getMyDataChoice = ref(false);
 			:user="user"
 			:db="db"
 			:active="currentTab == 'calendar'"
+			@restore="restoreBlock"
 		></Log>
 		<!-- <div class="week">
 			<div class="week-box">
@@ -3350,7 +3399,7 @@ p {
 	font-size: 24px;
 	padding: 12px 20px;
 	margin: 10px;
-	border-radius: 12px;
+	border-radius: 10px;
 	transition: 0.3s;
 	cursor: pointer;
 	user-select: none;
@@ -3398,25 +3447,27 @@ p {
 }
 
 @media (max-width: 900px) {
-	.tabs-container {
+	/* .tabs-container {
 		justify-content: flex-start;
 		align-items: flex-end;
-	}
-	.tabs {
+	} */
+	/* .tabs {
 		width: 100vw;
 		border-radius: 0px;
-	}
+	} */
 
 	.tab {
-		/* padding: 15px 10px; */
-		margin: 0px;
+		overflow: hidden;
+		margin: 10px;
 		font-size: 20px;
-		border-radius: 0px;
+		/* border-radius: 0px; */
 		flex: 1;
+		padding: 0px;
+		width: 60px;
+		height: 60px;
 	}
 
 	.tab-icon:not(:only-child) {
-		/* margin-right: 5px; */
 	}
 }
 
@@ -3602,6 +3653,17 @@ div.big-btn.disabled {
 
 	.modal-content h1 {
 		margin: 20px 20px;
+	}
+
+	.modal.modal-banner .modal-content {
+		top: 10%;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 80%;
+		height: auto;
+		bottom: unset;
+		border-radius: 12px !important;
+		padding: 20px;
 	}
 }
 
@@ -3982,5 +4044,11 @@ input.block-text {
 	100% {
 		border: 4px solid white;
 	}
+}
+
+.is-offline {
+	opacity: 0.6;
+	pointer-events: none;
+	filter: grayscale(1) blur(2px);
 }
 </style>
