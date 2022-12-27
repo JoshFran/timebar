@@ -50,6 +50,7 @@ Chart.register(...registerables);
 import Color from "./Color.vue";
 import Log from "./Log.vue";
 import Icon from "./Icon.vue";
+import Charts from "./Charts.vue";
 import Selector from "./Selector.vue";
 import Dialog from "./Dialog.vue";
 import LoginBox from "./LoginBox.vue";
@@ -2822,32 +2823,8 @@ const getMyDataChoice = ref(false);
 		:class="{ active: currentTab == 'chart' }"
 		id="charts-area"
 	>
-		<div class="panel">
-			<div class="select-bar">
-				{{ currentChartRange.name }}
-				<Dialog>
-					<Selector
-						v-model="currentChartRange"
-						:data="timeRanges"
-					></Selector>
-				</Dialog>
-			</div>
-		</div>
 		<template v-if="currentTab == 'chart'">
-			<div class="chart-row">
-				<DoughnutChart
-					v-if="testData"
-					:options="chartOptions"
-					class="chart"
-					:chartData="testData"
-				/>
-				<BarChart
-					v-if="stackedChart"
-					:options="chartOptions"
-					class="chart"
-					:chartData="stackedChart"
-				/>
-			</div>
+			<Charts v-if="user" :blocks="blocks" :user="user" :db="db"></Charts>
 		</template>
 	</div>
 
@@ -4002,6 +3979,7 @@ input.block-text {
 
 .tracking-clock {
 	position: absolute;
+	box-sizing: content-box;
 	top: 160px;
 	--add-scale: 0;
 	left: 160px;

@@ -18,6 +18,7 @@
     "font-awesome-icon-chars": "^2.6.0",
     "interactjs": "^1.10.11",
     "invert-color": "^2.0.0",
+    "litepie-datepicker": "^1.0.14",
     "vfa-picker": "^5.9.1",
     "vue": "^3.2.25",
     "vue-chart-3": "^3.0.7",
@@ -27,6 +28,9 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^2.0.0",
     "@vue/cli-plugin-router": "~5.0.0",
+    "autoprefixer": "^10.4.13",
+    "postcss": "^8.4.20",
+    "tailwindcss": "^3.2.4",
     "vite": "^2.7.2",
     "vue-cli-plugin-svg": "~0.2.1"
   }

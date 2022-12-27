@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import firebase from "firebase/compat/app";
+import LitepieDatepicker from "litepie-datepicker";
 
 import HelloWorld from "./components/HelloWorld.vue";
 import Splash from "./components/Splash.vue";
@@ -21,7 +22,7 @@ const firebaseConfig = {
 	storageBucket: "timebar-xyz.appspot.com",
 	messagingSenderId: "626575089341",
 	appId: "1:626575089341:web:c2fdb31b41b693b952e1d4",
-	measurementId: "G-49HX705VBQ"
+	measurementId: "G-49HX705VBQ",
 };
 
 // Initialize Firebase
@@ -32,18 +33,18 @@ const auth = getAuth(fapp);
 window.timebar = {
 	auth,
 	analytics,
-	fapp
+	fapp,
 };
 
 const routes = [
 	{ path: "/", component: Splash },
-	{ path: "/app", component: HelloWorld }
+	{ path: "/app", component: HelloWorld },
 ];
 
 const router = createRouter({
 	// 4. Provide the history implementation to use. We are using the hash history for simplicity here.
 	history: createWebHistory(),
-	routes // short for `routes: routes`
+	routes, // short for `routes: routes`
 });
 
 import { createApp } from "vue";
@@ -51,7 +52,7 @@ import { MotionPlugin } from "@vueuse/motion";
 import App from "./App.vue";
 
 let app = createApp(App);
-
+app.use(LitepieDatepicker);
 app.use(MotionPlugin);
 app.use(router);
 

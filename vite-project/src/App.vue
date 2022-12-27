@@ -1,6 +1,7 @@
 <script setup>
 import HelloWorld from "./components/HelloWorld.vue";
 import Splash from "./components/Splash.vue";
+import "./style.css";
 </script>
 
 <template>
@@ -11,6 +12,7 @@ import Splash from "./components/Splash.vue";
 </template>
 
 <style>
+/* @import "./style.css"; */
 #app {
 	font-family: Avenir, Helvetica, Arial, sans-serif;
 	-webkit-font-smoothing: antialiased;
