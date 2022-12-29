@@ -14,6 +14,11 @@ const props = defineProps({
 		type: Object,
 		default: () => ({}),
 	},
+	alwaysFloat: Boolean,
+	autoClose: {
+		type: Boolean,
+		default: true,
+	},
 });
 
 const open = ref(false);
@@ -85,13 +90,17 @@ document.addEventListener("click", (e) => {
 		!e.target.matches(".dialog-box-inner") &&
 		!e.target.closest(".dialog-box-inner")
 	) {
-		closeDialog();
+		if (props.autoClose) {
+			closeDialog();
+		}
 	}
 });
 
 document.addEventListener("mousewheel", (e) => {
 	if (open.value && !e.target.closest(".dialog-box-inner")) {
-		closeDialog();
+		if (props.autoClose) {
+			closeDialog();
+		}
 	}
 });
 
@@ -109,7 +118,7 @@ function closeDialog() {
 </script>
 
 <template>
-	<div ref="root" class="dialog-box" :class="{ open: open }">
+	<div ref="root" class="dialog-box" :class="{ open: open, alwaysFloat }">
 		<Teleport to="body" v-if="open">
 			<div class="dialog-shade" :class="{ closing: animateClose }"></div>
 			<div
@@ -128,7 +137,7 @@ function closeDialog() {
 
 <style scoped>
 @media (max-width: 900px) {
-	.dialog-box-inner {
+	.dialog-box:not(.alwaysFloat) .dialog-box-inner {
 		width: 100vw !important;
 		height: 100% !important;
 		left: 0vw !important;
@@ -142,21 +151,21 @@ function closeDialog() {
 		transform-origin: center !important;
 	}
 
-	.dialog-box-inner-container {
+	.dialog-box:not(.alwaysFloat) .dialog-box-inner-container {
 		pointer-events: all !important;
 		max-height: 80vh !important;
 	}
 
-	.dialog-box-inner-container {
+	.dialog-box:not(.alwaysFloat) .dialog-box-inner-container {
 		width: 250px;
 	}
 
-	.dialog-box-inner::after,
-	.dialog-box-inner::before {
+	.dialog-box:not(.alwaysFloat) .dialog-box-inner::after,
+	.dialog-box:not(.alwaysFloat) .dialog-box-inner::before {
 		display: none;
 	}
 
-	.dialog-shade {
+	.dialog-box:not(.alwaysFloat) .dialog-shade {
 		position: fixed;
 		width: 100vw;
 		height: 100vh;
@@ -169,7 +178,7 @@ function closeDialog() {
 		transition: 0.3s;
 	}
 
-	.closing.dialog-shade {
+	.dialog-box:not(.alwaysFloat) .closing.dialog-shade {
 		animation: fade-out 0.3s ease-in-out forwards;
 	}
 }

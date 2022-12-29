@@ -30,6 +30,7 @@ import charMap from "../unicode.js";
 import { filterIcon } from "../iconer.js";
 
 import Selector from "./Selector.vue";
+import InputBlocks from "./InputBlocks.vue";
 import Dialog from "./Dialog.vue";
 
 import {
@@ -52,6 +53,8 @@ import {
 
 import { formatTime, formatSeconds } from "../time.js";
 import LogRange from "../LogRange";
+import { getLogItemsInRange } from "../api";
+import InputProxyBlock from "./InputProxyBlock.vue";
 
 const props = defineProps({
 	user: Object,
@@ -76,70 +79,6 @@ let dateValue = ref([
 	formatToDDMMMYYYY(subDays(startOfDay(new Date()), 7)),
 	formatToDDMMMYYYY(endOfDay(new Date())),
 ]);
-
-let chunks = {};
-
-const chunkIntervalSeconds = 60 * 60 * 24 * 14;
-
-function dateToChunkId(date) {
-	let n = date.getTime();
-	return (
-		Math.floor(n / (1000 * chunkIntervalSeconds)) * chunkIntervalSeconds
-	).toString();
-}
-
-function getChunkRef(chunkId) {
-	return doc(db, "users", user.uid, "chunks", chunkId);
-}
-
-function getOrEnqueueChunkData(chunkId) {
-	if (chunks[chunkId]) {
-		return chunks[chunkId].data;
-	}
-
-	chunks[chunkId] = {
-		unsubscribe: null,
-		data: null,
-	};
-
-	const unsubscribe = onSnapshot(getChunkRef(chunkId), (snapshot) => {
-		let d = snapshot.data();
-
-		if (d) {
-			chunks[chunkId].data = d;
-
-			let year = new Date(parseInt(chunkId) * 1000).getFullYear();
-			if (yearCaches.has(year)) {
-				if (yearRerenderTimeout) {
-					clearTimeout(yearRerenderTimeout);
-				}
-				yearRerenderTimeout = setTimeout(() => {
-					getYearCache(year, true);
-				}, 1000);
-			}
-
-			let months = [];
-			for (let d = 0; d < 14; d++) {
-				let mDate = new Date(
-					parseInt(chunkId) * 1000 + d * 24 * 60 * 60 * 1000
-				);
-				let month =
-					mDate.getUTCFullYear() + "-" + (mDate.getUTCMonth() + 1);
-				if (!months.includes(month)) {
-					months.push(month);
-				}
-			}
-			console.log(months);
-			for (let month of months) {
-				if (monthCaches.has(month)) {
-					getMonthCache(month, true);
-				}
-			}
-		}
-	});
-
-	return null;
-}
 
 function getNow() {
 	return Date.now();
@@ -218,9 +157,34 @@ const autoPos = ref({ x: 0, y: 0 });
 
 const tabActive = computed(() => props.active);
 
+const filterActive = ref(false);
+
+const whitelistEnabled = ref(false);
+const blacklistEnabled = ref(false);
+const merging = ref([]);
+
+function sumLog(items, start, end) {
+	start = start.getTime();
+	end = end.getTime();
+	let blocks = {};
+	for (let item of items) {
+		let realStart = Math.max(item[1], start);
+		let realEnd = Math.min(item[2], end);
+		let duration = (realEnd - realStart) / 1000;
+		if (blocks[item[0]]) blocks[item[0]] += duration;
+		else blocks[item[0]] = duration;
+	}
+
+	return blocks;
+}
+
 let logRange = computed(() => {
 	let start = new Date(dateValue.value[0]);
-	let end = new Date(dateValue.value[1]);
+	let end = endOfDay(new Date(dateValue.value[1]));
+
+	getLogItemsInRange(start, end).then((a) => {
+		console.log(sumLog(a, start, end));
+	});
 
 	return new LogRange(start, end);
 });
@@ -238,7 +202,7 @@ let blocks = computed(() => {
 <template>
 	<!-- <div class="panel"> -->
 	<!-- <div class="select-bar cursor-pointer"> -->
-	<div class="py-10 min-w-[350px]">
+	<div class="py-10 min-w-[350px] flex flex-row">
 		<litepie-datepicker
 			v-model="dateValue"
 			separator=" — "
@@ -256,7 +220,103 @@ let blocks = computed(() => {
 					}))
 			"
 		></litepie-datepicker>
-		{{ logRange.walk() }}
+		<button
+			@click="filterActive = !filterActive"
+			class="ml-2 rounded-full p-2 min-w-[40px] min-h-[40px] max-w-[40px] max-h-[40px] flex items-center justify-center hover:bg-gray-600 hover:bg-opacity-50"
+		>
+			<i class="fas fa-filter"></i>
+		</button>
+
+		<div
+			class="filter-modal modal"
+			@click="
+				$event.target.classList.contains('modal')
+					? (filterActive = false)
+					: null
+			"
+			:class="{ open: filterActive }"
+		>
+			<div
+				class="modal-content p-10 space-y-4 overflow-auto pb-40"
+				style="justify-content: start"
+			>
+				<div class="w-80 max-w-80">
+					<p>Filters</p>
+				</div>
+				<div class="w-80 max-w-80">
+					<p>
+						<input
+							type="checkbox"
+							class="mr-2"
+							v-model="whitelistEnabled"
+						/>
+						<span
+							:class="{
+								'opacity-25 pointer-events-none':
+									!whitelistEnabled,
+							}"
+							>Whitelist</span
+						>
+					</p>
+					<div
+						:class="{
+							'opacity-25 pointer-events-none': !whitelistEnabled,
+						}"
+					>
+						<InputBlocks></InputBlocks>
+					</div>
+				</div>
+				<div class="w-80 max-w-80">
+					<p>
+						<input
+							type="checkbox"
+							class="mr-2"
+							v-model="blacklistEnabled"
+						/>
+						<span
+							:class="{
+								'opacity-25 pointer-events-none':
+									!blacklistEnabled,
+							}"
+							>Blacklist</span
+						>
+					</p>
+					<div
+						:class="{
+							'opacity-25 pointer-events-none': !blacklistEnabled,
+						}"
+					>
+						<InputBlocks></InputBlocks>
+					</div>
+				</div>
+				<div class="w-80 max-w-80">
+					<p>Merging</p>
+
+					<template v-for="(m, i) in merging">
+						<div
+							class="border-gray-200 p-2 rounded-lg border relative mb-8"
+						>
+							<InputBlocks v-model="m.from"></InputBlocks>
+							<div>=</div>
+							<InputProxyBlock v-model="m.to"></InputProxyBlock>
+							<button
+								@click="merging.splice(i, 1)"
+								class="absolute -top-5 -right-5 bg-red-400 rounded-full w-8 h-8 min-w-8 min-h-8 max-w-8 max-h-8 flex items-center justify-center hover:bg-gray-600 hover:bg-red-500"
+							>
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+					</template>
+
+					<button
+						@click="merging.push({ from: [], to: '' })"
+						class="ml-2 mt-2 bg-gray-100 rounded-full p-2 min-w-[40px] min-h-[40px] max-w-[40px] max-h-[40px] flex items-center justify-center hover:bg-gray-600 hover:bg-opacity-50"
+					>
+						<i class="fas fa-add"></i>
+					</button>
+				</div>
+			</div>
+		</div>
 	</div>
 	<!-- </div> -->
 	<!-- </div> -->

@@ -126,6 +126,8 @@ const blockMap = computed(() => {
 		map[x + "," + y] = blocks.value[i];
 	}
 
+	window.timebar.blocks = blocks.value;
+
 	return map;
 });
 
@@ -475,7 +477,7 @@ function getBlockTransform(block) {
 }
 
 document.addEventListener("keydown", (e) => {
-	if (e.key == "Enter") {
+	if (!e.target.closest("input") && e.key == "Enter") {
 		if (!editing.value)
 			editBlock(getClosestBlock(position.value.x, position.value.y));
 	}
@@ -3569,81 +3571,6 @@ div.big-btn.disabled {
 	}
 }
 
-.modal-content {
-	position: fixed;
-	top: 15%;
-	left: 15%;
-	width: 70%;
-	height: 70%;
-	background: white;
-	border-radius: 24px;
-	box-shadow: 0 0 24px 0 rgba(0, 0, 0, 0.2);
-	z-index: 40;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-direction: column;
-	transform: scale(0);
-	transition: 0.3s;
-	pointer-events: none;
-}
-
-.modal {
-	font-family: "Overpass", sans-serif;
-	font-size: 18px;
-	position: fixed;
-	top: 0%;
-	left: 0%;
-	width: 100%;
-	height: 100%;
-	background: rgba(0, 0, 0, 0.295);
-	z-index: 30;
-	opacity: 0;
-	transition: 0.3s;
-	pointer-events: none;
-}
-
-.modal.open {
-	opacity: 1;
-	transition: 0.3s;
-	pointer-events: all;
-}
-
-.modal.open .modal-content {
-	transform: scale(1);
-	pointer-events: all;
-}
-
-@media (max-width: 900px) {
-	.modal-content {
-		width: 100%;
-		top: 10%;
-		left: 0%;
-		border-bottom-left-radius: 0;
-		border-bottom-right-radius: 0;
-		bottom: 0%;
-		height: unset;
-
-		justify-content: flex-start;
-		overflow: auto;
-	}
-
-	.modal-content h1 {
-		margin: 20px 20px;
-	}
-
-	.modal.modal-banner .modal-content {
-		top: 10%;
-		left: 50%;
-		transform: translateX(-50%);
-		width: 80%;
-		height: auto;
-		bottom: unset;
-		border-radius: 12px !important;
-		padding: 20px;
-	}
-}
-
 a {
 	color: #42b983;
 }
@@ -3683,24 +3610,6 @@ a {
 
 .editing .block-color-box {
 	display: block;
-}
-
-.back-drop {
-	opacity: 0;
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	background: rgba(0, 0, 0, 0.5);
-	z-index: 9;
-	transition: opacity 0.3s;
-	pointer-events: none;
-}
-
-.back-drop.active {
-	opacity: 1;
-	pointer-events: all;
 }
 
 .editing .block-background {
