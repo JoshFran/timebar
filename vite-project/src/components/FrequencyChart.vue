@@ -193,6 +193,9 @@ function draw() {
 			streakCounter[k].count
 		);
 	}
+
+	if (!isFinite(min.value)) min.value = 0;
+	if (!isFinite(max.value)) max.value = 0;
 }
 
 onMounted(() => {

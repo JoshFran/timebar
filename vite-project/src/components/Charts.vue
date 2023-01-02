@@ -287,6 +287,17 @@ function dateToWeekKey(date) {
 	let start = startOfWeek(date);
 	return dateToKey(start);
 }
+
+function cleanNumber(n) {
+	if (!isFinite(n)) {
+		return 0;
+	}
+	if (isNaN(n)) {
+		return 0;
+	}
+	return n;
+}
+
 class TimeAccumulator {
 	constructor(type) {
 		this.type = type;
@@ -363,12 +374,14 @@ class TimeAccumulator {
 
 			return {
 				samples: this.samples,
-				average: radiansToDaySeconds(rad),
-				mode: modeRad,
+				average: radiansToDaySeconds(cleanNumber(rad)),
+				mode: cleanNumber(modeRad),
 
-				maxDistUp: radiansToDaySeconds(maxDistUp),
-				maxDistDown: radiansToDaySeconds(maxDistDown),
-				divergence: radiansToDaySeconds((maxDistUp + maxDistDown) / 2),
+				maxDistUp: radiansToDaySeconds(cleanNumber(maxDistUp)),
+				maxDistDown: radiansToDaySeconds(cleanNumber(maxDistDown)),
+				divergence: radiansToDaySeconds(
+					cleanNumber((maxDistUp + maxDistDown) / 2)
+				),
 			};
 		} else {
 			let avg = this.totalX / this.samples.length;
@@ -472,30 +485,25 @@ class TimeAccumulator {
 			let weekAverage = 0;
 			let maxWeek = -Infinity;
 			let maxWeekDay = null;
-			if (Object.keys(weekBuckets).length > 40) {
-				console.log(Object.keys(weekBuckets).length, weekBuckets);
-			}
+
 			for (let i in weekBuckets) {
 				weekAverage += weekBuckets[i];
 			}
 			weekAverage /= Object.keys(weekBuckets).length;
-			if (Object.keys(weekBuckets).length > 40) {
-				console.log(weekAverage / (60 * 60));
-			}
 
 			return {
 				samples: this.samples,
-				average: avg,
-				max,
-				min,
-				maxDay,
-				minDay,
-				dayAverage,
-				weekAverage,
-				workDayAverage: workDayAverage / workDayCount,
-				dayMax: maxDayReal,
-				dayMaxDay,
-				divergence: (maxDistUp + maxDistDown) / 2,
+				average: cleanNumber(avg),
+				max: cleanNumber(max),
+				min: cleanNumber(min),
+				maxDay: cleanNumber(maxDay),
+				minDay: cleanNumber(minDay),
+				dayAverage: cleanNumber(dayAverage),
+				weekAverage: cleanNumber(weekAverage),
+				workDayAverage: cleanNumber(workDayAverage / workDayCount),
+				dayMax: cleanNumber(maxDayReal),
+				dayMaxDay: dayMaxDay,
+				divergence: cleanNumber((maxDistUp + maxDistDown) / 2),
 			};
 		}
 	}
@@ -521,7 +529,7 @@ const dayStats = computed(() => {
 	}
 
 	let a = sleep.getDayOfWeekStats();
-	console.log(a);
+
 	return {
 		bedtime: bedtime.getStats(),
 		waketime: waketime.getStats(),

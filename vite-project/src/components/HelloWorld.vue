@@ -1567,8 +1567,8 @@ function initUser(useTemplate) {
 								id: "aa",
 								x: 0,
 								y: 0,
-								name: "Internet",
-								color: "#2196f3",
+								name: "Sleeping",
+								color: "#7a7a7a",
 							},
 					  },
 				created: getNow(),
@@ -2571,7 +2571,7 @@ const getMyDataChoice = ref(false);
 			<h1 class="big-title">Get Started</h1>
 			<div class="btn-bar">
 				<div
-					class="big-btn"
+					class="big-btn min-w-[200px]"
 					:class="{ disabled: creatingUser }"
 					@click="initUser()"
 				>
@@ -2579,7 +2579,7 @@ const getMyDataChoice = ref(false);
 					<div>Empty</div>
 				</div>
 				<div
-					class="big-btn"
+					class="big-btn min-w-[200px]"
 					:class="{ disabled: creatingUser }"
 					@click="initUser(true)"
 				>
@@ -2659,7 +2659,7 @@ const getMyDataChoice = ref(false);
 						v-else
 						id="focus-input"
 						@keypress.enter="editing = ''"
-						class="block-text"
+						class="block-text bg-gray-200"
 						style="pointer-events: all"
 						v-model="block.name"
 						@change="updateBlock(block, { name: block.name })"
@@ -3656,7 +3656,6 @@ a {
 }
 
 input.block-text {
-	background-color: rgb(209, 209, 209);
 	color: black !important;
 	border: 10px solid white;
 	box-sizing: border-box;
