@@ -10,6 +10,9 @@ module.exports = {
 	],
 	darkMode: "class", // or 'media' or 'class'
 	theme: {
+		fontFamily: {
+			sans: ["open-sans", "sans-serif"],
+		},
 		extend: {
 			colors: {
 				// Change with you want it

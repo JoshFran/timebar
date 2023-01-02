@@ -18,3 +18,17 @@ export function formatSeconds(s) {
 		return Math.floor(s) + "s";
 	}
 }
+export function formatSecondsUpToHours(s) {
+	if (s >= 60 * 60) {
+		return formatTime(s / (60 * 60));
+	} else if (s >= 60) {
+		return (
+			"0:" +
+			formatTime(s / 60)
+				.split(":")[0]
+				.padStart(2, "0")
+		); //Math.round((s / 60 * 10)) / 10 + "m"
+	} else {
+		return Math.floor(s) + "s";
+	}
+}

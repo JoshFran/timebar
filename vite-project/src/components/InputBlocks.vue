@@ -13,7 +13,9 @@ import {
 	watch,
 } from "vue";
 
-let blocks = ref([]);
+const { modelValue } = defineProps({
+	modelValue: Array,
+});
 const emit = defineEmits(["update:modelValue"]);
 
 let currentName = ref("");
@@ -51,9 +53,10 @@ function handleKeydown(e) {
 	if (e.code == "Enter" && currentName.value.length) {
 		let selectedBlock = filtered.value[selectedIndex.value];
 		if (selectedBlock) {
-			let found = blocks.value.find((b) => b.name == selectedBlock.name);
+			let found = modelValue.find((b) => b.name == selectedBlock.name);
 			if (!found) {
-				blocks.value.push(selectedBlock);
+				modelValue.push(selectedBlock);
+				pushModel();
 			}
 		}
 		currentName.value = "";
@@ -62,9 +65,13 @@ function handleKeydown(e) {
 	selectedIndex.value = 0;
 
 	if (e.code == "Backspace" && !currentName.value) {
-		console.log("Pop");
-		blocks.value.pop();
+		modelValue.pop();
+		pushModel();
 	}
+}
+
+function pushModel() {
+	emit("update:modelValue", modelValue);
 }
 
 watch(selectedIndex, (val) => {
@@ -102,7 +109,7 @@ const filtered = computed(() => {
 		.filter((item) => {
 			if (!currentName.value) return true;
 
-			if (blocks.value.find((b) => b.name == item.name)) {
+			if (modelValue.find((b) => b.name == item.name)) {
 				return false;
 			}
 
@@ -125,14 +132,14 @@ const filtered = computed(() => {
 		@click="handleClick"
 		class="cursor-text relative input-root w-full rounded-lg min-h-12 py-2 px-3 bg-white border border-gray-200 flex flex-wrap items-center"
 	>
-		<template v-for="(b, i) in blocks">
+		<template v-for="(b, i) in modelValue">
 			<div
 				class="cursor-pointer mr-1 mb-1 rounded-full text-xs py-1 px-2 bg-gray-200 flex items-center justify-center"
 			>
 				<span
 					class="flex items-center justify-center"
 					:style="`color: ${b.color};`"
-					@click="() => blocks.splice(i, 1)"
+					@click="() => (modelValue.splice(i, 1), pushModel())"
 				>
 					<Icon class="text-sm mr-1" :icon="b.icon || b.name" />
 					<span stlye="line-height: 1em;">
@@ -165,7 +172,8 @@ const filtered = computed(() => {
 					:style="`color: ${block.color}`"
 					@click="
 						() => {
-							blocks.push(block);
+							modelValue.push(block);
+							pushModel();
 							currentName = '';
 						}
 					"

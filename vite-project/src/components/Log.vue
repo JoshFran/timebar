@@ -72,6 +72,22 @@ const props = defineProps({
 	db: Object,
 	blocks: Array,
 	active: Boolean,
+	restrictToParent: {
+		type: Boolean,
+		default: false,
+	},
+	noMobile: {
+		type: Boolean,
+		default: false,
+	},
+	startZoom: {
+		type: Number,
+		default: 0,
+	},
+	startDate: {
+		type: Date,
+		default: null,
+	},
 });
 
 let db = props.db;
@@ -143,6 +159,20 @@ function getChunkRef(chunkId) {
 
 let yearRerenderTimeout = null;
 let monthRerenderTimeout = null;
+
+function containerSize() {
+	if (props.restrictToParent) {
+		return {
+			width: cnvs.value.parentElement.clientWidth,
+			height: cnvs.value.parentElement.clientHeight,
+		};
+	} else {
+		return {
+			width: window.innerWidth,
+			height: window.innerHeight,
+		};
+	}
+}
 
 function getOrEnqueueChunkData(chunkId) {
 	if (chunks[chunkId]) {
@@ -673,7 +703,8 @@ class WeekLayout extends ViewLayout {
 	}
 
 	render() {
-		if (window.innerWidth < 900) {
+		let container = containerSize();
+		if (container.width < 900 && !props.noMobile) {
 			this.rows = 1;
 			this.columns = 1;
 			this.slots.push(new TextSlot(daysOfTheWeek[this.week.getDay()]));
@@ -699,14 +730,22 @@ class WeekLayout extends ViewLayout {
 	}
 
 	getTransform(slotIndex) {
+		let container = containerSize();
 		let margin = 20;
+		let wMargin = 400;
+		let hMargin = 300;
+		if (props.noMobile) {
+			wMargin = 0;
+			hMargin = 40;
+		}
 		let rowWidth =
-			(Math.min(cnvsSize.x - 400) - this.columns * margin) / this.columns;
-		let rowHeight = cnvsSize.y - 300;
+			(Math.min(cnvsSize.x - wMargin) - this.columns * margin) /
+			this.columns;
+		let rowHeight = cnvsSize.y - hMargin;
 
-		if (window.innerWidth < 900) {
+		if (container.width < 900 && !props.noMobile) {
 			rowWidth = cnvsSize.x - 300;
-			if (window.innerWidth < 600) {
+			if (container.width < 600) {
 				rowWidth = cnvsSize.x - 150;
 			}
 			let column = 0;
@@ -733,12 +772,16 @@ class WeekLayout extends ViewLayout {
 
 		let row = 0;
 		let column = slotIndex;
+		let yOff = 0;
+		if (props.noMobile) {
+			yOff = -110;
+		}
 
 		if (slotIndex > 6) {
 			column = slotIndex - 7;
 			return {
 				x: column * (rowWidth + margin),
-				y: row * rowHeight - 60,
+				y: row * rowHeight - 60 + yOff + (props.noMobile ? 20 : 0),
 				width: rowWidth,
 				height: 40,
 				radii: 10,
@@ -746,7 +789,7 @@ class WeekLayout extends ViewLayout {
 		} else {
 			return {
 				x: column * (rowWidth + margin),
-				y: row * rowHeight,
+				y: row * rowHeight + yOff,
 				width: rowWidth,
 				height: rowHeight,
 				radii: 10,
@@ -786,16 +829,17 @@ class MonthLayout extends ViewLayout {
 	}
 
 	getTransform(slotIndex) {
+		let container = containerSize();
 		let isText = slotIndex <= 7;
 		if (slotIndex > 7) {
 			slotIndex = slotIndex - 8;
 		}
 		let sideMargin = 400;
 
-		if (window.innerWidth < 1100) {
+		if (container.width < 1100) {
 			sideMargin = 200;
 		}
-		if (window.innerWidth < 600) {
+		if (container.width < 600) {
 			sideMargin = 20;
 		}
 
@@ -868,14 +912,15 @@ class YearLayout extends ViewLayout {
 	}
 
 	getTransform(slotIndex) {
+		let container = containerSize();
 		let psize = 40;
-		if (window.innerWidth < 1280) {
+		if (container.width < 1280) {
 			psize = 30;
 		}
-		if (window.innerWidth < 940) {
+		if (container.width < 940) {
 			psize = 20;
 		}
-		if (window.innerWidth < 485) {
+		if (container.width < 485) {
 			psize = 15;
 		}
 
@@ -899,12 +944,12 @@ class YearLayout extends ViewLayout {
 		function calcRowCol(index) {
 			let row = Math.floor(index / 4);
 			let column = index % 4;
-			if (window.innerWidth < 640) {
+			if (container.width < 640) {
 				// 3x4 layout
 				row = Math.floor(index / 3);
 				column = index % 3;
 			}
-			if (window.innerWidth < 485) {
+			if (container.width < 485) {
 				// 2x6 layout
 				row = Math.floor(index / 2);
 				column = index % 2;
@@ -954,6 +999,7 @@ function cacheLayout(key, fn) {
 }
 
 function getViewLayouts(day, zoom, slide) {
+	let container = containerSize();
 	if (slide != 0) {
 		if (zoom == -2) {
 			let day2 = addYears(day, slide);
@@ -985,7 +1031,7 @@ function getViewLayouts(day, zoom, slide) {
 			let day2 = addWeeks(day, slide);
 			let k1 = getWeek(day);
 			let k2 = getWeek(day2);
-			if (window.innerWidth < 900) {
+			if (container.width < 900 && !props.noMobile) {
 				day2 = addDays(day, slide);
 				k1 =
 					day.getFullYear() +
@@ -1027,7 +1073,7 @@ function getViewLayouts(day, zoom, slide) {
 		};
 	} else if (zoom == -1) {
 		let k2 = getWeek(day);
-		if (window.innerWidth < 900) {
+		if (container.width < 900 && !props.noMobile) {
 			k2 = day.getMonth() + "-" + day.getDate();
 		}
 		return {
@@ -1043,7 +1089,7 @@ function getViewLayouts(day, zoom, slide) {
 		};
 	} else if (zoom >= 0) {
 		let k1 = getWeek(day);
-		if (window.innerWidth < 900) {
+		if (container.width < 900 && !props.noMobile) {
 			k1 = day.getMonth() + "-" + day.getDate();
 		}
 		return {
@@ -1180,9 +1226,10 @@ function getMonthCache(monthKey, rerender) {
 }
 
 function centerCalendar() {
-	if ((cnvsSize.y - 300) * calendarScale.value < window.innerHeight) {
+	let container = containerSize();
+	if ((cnvsSize.y - 300) * calendarScale.value < container.height) {
 		calendarY.value =
-			(window.innerHeight - (cnvsSize.y - 300) * calendarScale.value) / 2;
+			(container.height - (cnvsSize.y - 300) * calendarScale.value) / 2;
 	}
 }
 
@@ -1234,6 +1281,7 @@ function paint(mouseCheck) {
 	let boxTarget = null;
 	let mobileResize = false;
 	let doPaint = !mouseCheck;
+	let container = containerSize();
 
 	if (doPaint) {
 		ctx.clearRect(0, 0, cnvsSize.x, cnvsSize.y);
@@ -1648,10 +1696,11 @@ function paint(mouseCheck) {
 			}
 
 			function renderYearLevel(opacity) {
+				let container = containerSize();
 				if (slot instanceof DaySlot) {
 					let yearCanvas = getYearCache(slot.date.getFullYear());
 					let d = getDayOfYear(slot.date);
-					if (window.innerWidth < 900) {
+					if (container.width < 900 && !props.noMobile) {
 					} else {
 						let oldAlpha = ctx.globalAlpha;
 						ctx.globalAlpha = opacity;
@@ -1749,10 +1798,11 @@ function paint(mouseCheck) {
 			}
 
 			function renderWeekLevel(opacity) {
+				let container = containerSize();
 				let log = null;
 
 				if (slot instanceof DaySlot) log = getLogForDay(slot.date);
-				// console.log(log);
+
 				if (log) {
 					let oldAlpha = ctx.globalAlpha;
 					ctx.globalAlpha = opacity;
@@ -2071,7 +2121,7 @@ function paint(mouseCheck) {
 			(mouseUseY - calendarYSmooth) /
 			((cnvsSize.y - 300) * calendarScaleSmooth);
 
-		if (window.innerWidth > 900) {
+		if (container.width > 900) {
 			if (currentMouseX < 200 || currentMouseX > cnvsSize.x - 200) {
 				mousePosDay = -1;
 			}
@@ -2082,13 +2132,19 @@ function paint(mouseCheck) {
 			(cnvsSize.y - 300) * mousePosDay * calendarScaleSmooth;
 
 		let margin = 200;
-		if (window.innerWidth < 900) {
+		let yOff = 0;
+		if (container.width < 900 && !props.noMobile) {
 			margin = 60;
+		}
+
+		if (props.noMobile) {
+			margin = 0;
 		}
 
 		for (let y = startDayX; y < endDayX; y += snapping) {
 			let screenY =
-				calendarYSmooth + (cnvsSize.y - 300) * y * calendarScaleSmooth;
+				calendarYSmooth +
+				(cnvsSize.y - 300 + yOff) * y * calendarScaleSmooth;
 			if (Math.abs(mousePosDayScreen - screenY) < 20) continue;
 
 			ctx.strokeStyle = "rgba(0, 0, 0, 0.03)";
@@ -2149,7 +2205,7 @@ function paint(mouseCheck) {
 		// }
 
 		if (snapMousePos != -1) {
-			if (boxTarget && window.innerWidth < 900) {
+			if (boxTarget && container.width < 900 && !props.noMobile) {
 				ctx.fillStyle = "white";
 				ctx.beginPath();
 				ctx.arc(
@@ -2182,7 +2238,7 @@ function paint(mouseCheck) {
 			(mouseUseY - calendarYSmooth) /
 			((cnvsSize.y - 300) * calendarScaleSmooth);
 
-		if (window.innerWidth < 900) {
+		if (container.width < 900 && !props.noMobile) {
 		} else {
 			if (currentMouseX < 200 || currentMouseX > cnvsSize.x - 200) {
 				mousePosDay = -1;
@@ -2217,17 +2273,18 @@ function paint(mouseCheck) {
 
 function updateCanvasSize() {
 	if (cnvs.value) {
+		let container = containerSize();
 		invalidateTransforms = true;
 
 		ctx = cnvs.value.getContext("2d");
 		ctx.imageSmoothingEnabled = false;
 		let ratio = window.devicePixelRatio;
-		cnvs.value.width = Math.floor(window.innerWidth * ratio);
-		cnvs.value.height = Math.floor(window.innerHeight * ratio);
-		cnvs.value.style.width = window.innerWidth + "px";
-		cnvs.value.style.height = window.innerHeight + "px";
-		cnvsSize.x = window.innerWidth;
-		cnvsSize.y = window.innerHeight;
+		cnvs.value.width = Math.floor(container.width * ratio);
+		cnvs.value.height = Math.floor(container.height * ratio);
+		cnvs.value.style.width = container.width + "px";
+		cnvs.value.style.height = container.height + "px";
+		cnvsSize.x = container.width;
+		cnvsSize.y = container.height;
 		ctx.scale(ratio, ratio);
 	}
 }
@@ -2259,12 +2316,19 @@ let targetedAction = {
 };
 
 onMounted(() => {
+	zoomLevel.value = props.startZoom;
+	console.log(props.startDate);
+	if (props.startDate) {
+		focusDay.value = props.startDate;
+		targetedDate = props.startDate;
+	}
 	updateCanvasSize();
 
 	window.addEventListener("resize", updateCanvasSize);
 
 	let last = performance.now();
 	function runPaint() {
+		let container = containerSize();
 		requestAnimationFrame(runPaint);
 
 		if (!tabActive.value) {
@@ -2313,7 +2377,7 @@ onMounted(() => {
 						1
 					);
 				} else if (zoomLevel.value == 0) {
-					if (window.innerWidth < 900) {
+					if (container.width < 900 && !props.noMobile) {
 						targetedDate = focusDay.value = addDays(
 							focusDay.value,
 							1
@@ -2339,7 +2403,7 @@ onMounted(() => {
 						-1
 					);
 				} else if (zoomLevel.value == 0) {
-					if (window.innerWidth < 900) {
+					if (container.width < 900 && !props.noMobile) {
 						targetedDate = focusDay.value = addDays(
 							focusDay.value,
 							-1

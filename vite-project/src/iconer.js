@@ -57,7 +57,7 @@ const alias = {
 	dishes: "hand-sparkles",
 	admin: "file-invoice",
 	administration: "file-invoice",
-	learning: "question"
+	learning: "question",
 };
 
 export function filterIcon(icon) {
@@ -69,4 +69,12 @@ export function filterIcon(icon) {
 		icons[alias[icon.toLowerCase()] || icon.toLowerCase()] ||
 		"far fa-circle"
 	);
+}
+
+export function filterIconNoAlias(icon) {
+	if (typeof icon === "undefined") {
+		icon = "";
+	}
+
+	return icons[icon.toLowerCase()] || "far fa-circle";
 }

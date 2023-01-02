@@ -18,9 +18,8 @@ onMounted(() => {
 	let landed = Date.now();
 	timerInter = setInterval(() => {
 		let s = 60 * 24 + Math.floor((Date.now() - landed) / 1000);
-		document.querySelector("#Timer").children[0].innerHTML = formatSeconds(
-			s
-		);
+		document.querySelector("#Timer").children[0].innerHTML =
+			formatSeconds(s);
 	}, 500);
 });
 </script>
@@ -32,7 +31,7 @@ onMounted(() => {
 			<router-link to="/app" class="btn hide-mobile">Launch</router-link>
 		</div>
 		<div class="splash-text">
-			<h1>The time tracker built for life</h1>
+			<h1 class="text-4xl mb-4">The time tracker built for life</h1>
 			<p>
 				Timebar never stops ticking. It stays out of your way, and
 				provides the flexibility to track everything from broad
@@ -88,7 +87,7 @@ onMounted(() => {
 	<div class="splash-row">
 		<div>
 			<h2>Get started</h2>
-			<p>
+			<p class="mb-4">
 				Timebar is completely free to use. Your data is yours and yours
 				only.
 			</p>

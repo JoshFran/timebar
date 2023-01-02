@@ -19,10 +19,25 @@ let iconActive = ref(false);
 let inputEl = ref(null);
 
 let value = ref({
-	icon: "circle",
+	icon: "circle-outline",
 	name: "Untitled",
 	color: "#2196f3",
 });
+const props = defineProps({
+	modelValue: Array,
+});
+
+watch(
+	() => props.modelValue,
+	() => {
+		value.value = props.modelValue || {
+			icon: "circle-outline",
+			name: "Untitled",
+			color: "#2196f3",
+		};
+	}
+);
+
 const emit = defineEmits(["update:modelValue"]);
 
 const selectorIcons = computed(() => {
@@ -54,7 +69,10 @@ function handleClick(e) {
 			>
 				<Dialog>
 					<Selector
-						@update:modelValue="value.icon = $event.name"
+						@update:modelValue="
+							value.icon = $event.name;
+							emit('update:modelValue', value);
+						"
 						:data="selectorIcons"
 					></Selector>
 				</Dialog>
@@ -66,9 +84,10 @@ function handleClick(e) {
 			style="line-height: 1em"
 			class="ml-2 h-10 w-full outline-none pt-[3px]"
 			v-model="value.name"
+			@change="emit('update:modelValue', value)"
 		/>
 		<Color
-			class="block-color-box scale-50 mr-3"
+			class="block-color-box scale-75 mr-3"
 			v-model="value.color"
 			@update:modelValue="emit('update:modelValue', value)"
 		></Color>

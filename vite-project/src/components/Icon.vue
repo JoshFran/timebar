@@ -5,18 +5,26 @@ import {
 	onMounted,
 	ref,
 	defineEmits,
-	Teleport
+	Teleport,
 } from "vue";
 
-import { filterIcon } from "../iconer.js";
+import { filterIcon, filterIconNoAlias } from "../iconer.js";
 
-const { icon } = defineProps({
-	icon: String
+const { icon, noFilter } = defineProps({
+	icon: String,
+	noFilter: {
+		type: Boolean,
+		default: false,
+	},
 });
 </script>
 
 <template>
-	<i :class="filterIcon(icon) + ' fa-5x'">
+	<i
+		:class="
+			noFilter ? filterIconNoAlias(icon) : filterIcon(icon) + ' fa-5x'
+		"
+	>
 		<slot></slot>
 	</i>
 </template>

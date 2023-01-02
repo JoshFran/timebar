@@ -244,8 +244,8 @@ export async function getClosestBehind(chunkId) {
 
 	let q = query(
 		collection(db, "users", user.uid, "chunks"),
-		orderBy(documentId(), "asc"),
-		where(documentId(), "<", chunkId),
+		orderBy("created", "desc"),
+		where("created", "<", chunkId * 1000),
 		limit(1)
 	);
 
@@ -339,6 +339,25 @@ async function getOrAwaitChunkData(chunkId) {
 		if (d) {
 			chunks[chunkId].data = d;
 			return d;
+		}
+	}
+
+	return null;
+}
+
+export function binarySearchData(data, timeInMs) {
+	let start = 0;
+	let end = data.length - 1;
+
+	while (start <= end) {
+		let mid = Math.floor((start + end) / 2);
+		let item = data[mid];
+		if (item[1] <= timeInMs && item[2] >= timeInMs) {
+			return item;
+		} else if (item[1] > timeInMs) {
+			end = mid - 1;
+		} else {
+			start = mid + 1;
 		}
 	}
 
