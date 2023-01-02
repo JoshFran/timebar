@@ -1054,19 +1054,19 @@ function findBlock(name) {
 }
 
 onMounted(() => {
-	merging.value = [
-		{
-			from: [findBlock("working"), findBlock("work self")],
-			to: {
-				id: "!0",
-				icon: "briefcase",
-				name: "Working",
-				color: "#8bc34a",
+	if (false) {
+		merging.value = [
+			{
+				from: [findBlock("working"), findBlock("work self")],
+				to: {
+					id: "!0",
+					icon: "briefcase",
+					name: "Working",
+					color: "#8bc34a",
+				},
 			},
-		},
-	];
+		];
 
-	if (true) {
 		let colors = {};
 		console.log(blocks.value);
 		for (let b of blocks.value) {
@@ -1088,7 +1088,6 @@ onMounted(() => {
 				});
 			}
 		}
-		console.log("Merged", merging.value);
 	}
 
 	for (let g of grabs.value) {
@@ -1119,7 +1118,7 @@ onMounted(() => {
 	<div class="overflow-auto space-y-4 pb-40">
 		<!-- <div class="panel"> -->
 		<!-- <div class="select-bar cursor-pointer"> -->
-		<div class="py-10 min-w-[350px] flex flex-row">
+		<div class="p-4 max-w-[400px] flex flex-row mx-auto">
 			<litepie-datepicker
 				v-model="dateValue"
 				separator=" — "
@@ -1252,9 +1251,11 @@ onMounted(() => {
 			</div>
 		</div>
 
-		<div class="chart-row grid grid-cols-12 gap-4 w-full px-10">
+		<div
+			class="chart-row grid grid-cols-1 lg:grid-cols-12 gap-4 w-full px-4 lg:px-10"
+		>
 			<div
-				class="chart bg-white rounded-lg p-4 col-span-4 aspect-square flex items-center justify-center"
+				class="chart bg-white rounded-lg p-4 col-span-1 lg:col-span-4 aspect-square flex items-center justify-center"
 			>
 				<DoughnutChart
 					:options="chartOptions"
@@ -1263,10 +1264,10 @@ onMounted(() => {
 				/>
 			</div>
 			<div
-				class="chart bg-white rounded-lg p-4 col-span-8 grid grid-cols-3 grid-rows-2 gap-4"
+				class="chart bg-white rounded-lg p-4 col-span-1 lg:col-span-8 grid grid-rows-4 lg:grid-cols-3 lg:grid-rows-2 gap-4"
 			>
 				<div
-					class="bg-gray-100 p-4 px-6 rounded-lg inline-flex flex-col col-start-1 col-end-3 items-start justify-start relative overflow-hidden"
+					class="bg-gray-100 p-4 px-6 rounded-lg inline-flex flex-col lg:col-start-1 lg:col-end-3 items-start justify-start relative overflow-hidden"
 				>
 					<div class="text-left inline-flex flex-col">
 						<ClockCanvas
@@ -1299,7 +1300,7 @@ onMounted(() => {
 					</div>
 				</div>
 				<div
-					class="bg-gray-100 p-4 px-6 rounded-lg inline-flex flex-col items-start justify-end relative col-start-1 row-start-2 col-end-3 overflow-hidden"
+					class="bg-gray-100 p-4 px-6 rounded-lg inline-flex flex-col items-start justify-end relative lg:col-start-1 lg:row-start-2 lg:col-end-3 overflow-hidden"
 				>
 					<div class="text-left inline-flex flex-col">
 						<ClockCanvas
@@ -1334,7 +1335,7 @@ onMounted(() => {
 				</div>
 
 				<div
-					class="bg-gray-100 p-2 px-4 rounded-lg inline-flex flex-col items-center justify-center relative overflow-hidden col-start-3 row-start-1"
+					class="bg-gray-100 p-2 px-4 rounded-lg inline-flex flex-col items-center justify-center relative overflow-hidden lg:col-start-3 lg:row-start-1"
 				>
 					<div class="text-left inline-flex flex-col">
 						<div class="absolute bottom-0 right-0 left-0 h-10">
@@ -1382,7 +1383,7 @@ onMounted(() => {
 					</div>
 				</div>
 				<div
-					class="bg-gray-100 rounded-lg h-full relative overflow-hidden col-start-3 row-start-2"
+					class="bg-gray-100 rounded-lg h-full relative overflow-hidden lg:col-start-3 lg:row-start-2"
 				>
 					<div
 						class="text-left inline-flex h-full p-2 flex-col items-start w-full space-y-1"
@@ -1413,7 +1414,7 @@ onMounted(() => {
 				</div>
 			</div>
 		</div>
-		<div class="chart-row flex flex-row gap-4 px-10">
+		<div class="chart-row flex flex-row gap-4 px-4 lg:px-10">
 			<div
 				class="chart bg-white rounded-lg p-4 col-span-4 flex items-center justify-center w-full"
 			>
@@ -1426,7 +1427,7 @@ onMounted(() => {
 				/>
 			</div>
 		</div>
-		<div class="chart-row flex flex-row gap-4 px-10">
+		<div class="chart-row flex flex-row gap-4 px-4 lg:px-10">
 			<div
 				class="chart bg-white rounded-lg p-4 col-span-4 flex items-center justify-center w-full"
 			>
@@ -1438,7 +1439,9 @@ onMounted(() => {
 				/>
 			</div>
 		</div>
-		<div class="chart-row grid grid-cols-2 gap-4 px-10">
+		<div
+			class="chart-row grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 lg:px-10"
+		>
 			<div
 				class="chart bg-white rounded-lg p-4 col-span-1 flex flex-row items-center justify-center w-full space-x-2"
 			>
@@ -1506,7 +1509,9 @@ onMounted(() => {
 				/>
 			</div>
 		</div>
-		<div class="chart-row grid grid-cols-2 gap-4 px-10">
+		<div
+			class="chart-row grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 lg:px-10"
+		>
 			<div
 				v-for="grab in grabs"
 				class="chart bg-white rounded-lg p-4 col-span-1 flex flex-col w-full"
@@ -1520,7 +1525,9 @@ onMounted(() => {
 				/>
 			</div>
 		</div>
-		<div class="chart-row grid grid-cols-4 gap-4 px-10">
+		<div
+			class="chart-row grid grid-cols-1 lg:grid-cols-4 2xl:grid-cols-5 gap-4 px-4 lg:px-10"
+		>
 			<div
 				class="chart bg-white rounded-lg col-span-1 flex flex-col w-full overflow-hidden"
 			>
@@ -1700,7 +1707,7 @@ onMounted(() => {
 				</div>
 			</div>
 		</div>
-		<div class="chart-row grid grid-cols-2 px-10 gap-4">
+		<div class="chart-row grid grid-cols-2 px-10 gap-4" v-if="false">
 			<div
 				class="chart bg-white rounded-lg overflow-hidden flex flex-col pointer-events-none"
 			>
